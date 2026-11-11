@@ -1,6 +1,5 @@
 /target
 
-installer/Output/
 .claude/
 
 server/target/

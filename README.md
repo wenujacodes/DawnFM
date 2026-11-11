@@ -6,7 +6,7 @@
   <p>
     <a href="https://github.com/jackychan4891/BitChord-PC-Continued/releases/latest"><img src="https://img.shields.io/github/v/release/jackychan4891/BitChord-PC-Continued?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
     <a href="https://github.com/jackychan4891/BitChord-PC-Continued/releases"><img src="https://img.shields.io/github/downloads/jackychan4891/BitChord-PC-Continued/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-333?style=flat-square&labelColor=0d1117" alt="Platforms">
+    <img src="https://img.shields.io/badge/platform-macOS-333?style=flat-square&labelColor=0d1117" alt="Platforms">
     <a href="LICENSE"><img src="https://img.shields.io/github/license/jackychan4891/BitChord-PC-Continued?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
   </p>
 
@@ -66,26 +66,22 @@
 
 ## Installation
 
-Download the latest build from [Releases](https://github.com/jackychan4891/BitChord-PC-Continued/releases/latest).
+Download the latest build from [Releases](https://github.com/wenujacodes/BitChord-macOS/releases/latest) when available, or build it yourself (below).
 
-- **Windows** — download the Windows release asset, extract/install it, and run `bitchord.exe`.
-- **macOS / Linux** — use the platform release assets when available.
-
-If Windows SmartScreen appears for an unsigned build, choose **More info → Run anyway**.
+The app is signed ad hoc (there's no Developer ID), so macOS asks before its first launch: right-click `bitchord.app` and choose **Open**, or run `xattr -dr com.apple.quarantine bitchord.app`.
 
 ## Building from source
 
 You need the [Rust toolchain](https://rustup.rs/).
 
 ```sh
-git clone https://github.com/jackychan4891/BitChord-PC-Continued.git
-cd BitChord-PC-Continued
+git clone https://github.com/wenujacodes/BitChord-macOS.git
+cd BitChord-macOS
 cargo build --release
+macos/bundle.sh target/release/bitchord 2.0.0 out
 ```
 
-The built app will be in `target/release/`.
-
-Platform builds may require native dependencies (audio/system libraries and toolchain components used by sign-in or platform integrations). Check the repository’s platform docs and release workflow for the exact prerequisites.
+This makes `out/bitchord.app` for your Mac's architecture (Apple Silicon or Intel).
 
 ## Notes
 
