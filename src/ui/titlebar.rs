@@ -16,10 +16,9 @@ const BUTTON_W: f32 = 46.0;
 const EDGE: f32 = 5.0;
 const CORNER: f32 = 14.0;
 
-/// Whether the app draws the title bar itself: on Windows, unless `YTM_NATIVE_TITLEBAR`
-/// asks for the system's.
+/// Whether the app draws the title bar itself. Never on macOS, which keeps the system's.
 pub fn custom() -> bool {
-    cfg!(windows) && std::env::var_os("YTM_NATIVE_TITLEBAR").is_none()
+    false
 }
 
 /// Full screen has no title bar. The app's own full screen (`crate::fullscreen`) goes
@@ -231,72 +230,4 @@ fn edges(ctx: &egui::Context, sides_only: bool) {
             }
         }
     });
-}
-
-/// The main window, from `main`: its whole area is the app's to draw on.
-///
-/// winit's frameless window keeps a one-pixel system frame along the top (it moves the
-/// window's drawable area down a pixel so Windows still draws the drop shadow), and that
-/// shows as a darker line above the app. Here that shift is undone, so the drawable area
-/// is the whole window, and the shadow comes from a one-pixel frame along the bottom
-/// instead. That frame sits under the app's bottom row, which the app always paints
-/// opaque, so it never shows. Anything else winit decides (the work area when maximized)
-/// stays as it is.
-#[cfg_attr(not(windows), allow(unused_variables))]
-pub fn set_hwnd(hwnd: *mut std::ffi::c_void) {
-    #[cfg(windows)]
-    if custom() {
-        frame::init(hwnd);
-    }
-}
-
-#[cfg(windows)]
-mod frame {
-    use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-    use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
-    use windows::Win32::UI::Controls::MARGINS;
-    use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
-    use windows::Win32::UI::WindowsAndMessaging::{NCCALCSIZE_PARAMS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WM_CHAR, WM_NCCALCSIZE, WM_SYSCHAR};
-
-    pub fn init(hwnd: *mut std::ffi::c_void) {
-        let hwnd = HWND(hwnd);
-        // SAFETY: the app's own window, on the thread that made it (still hidden: eframe
-        // shows it after the first frame); the subclass lives as long as the window.
-        unsafe {
-            if !SetWindowSubclass(hwnd, Some(proc), 1, 0).as_bool() {
-                log::warn!("title bar: couldn't subclass the window");
-                return;
-            }
-            let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: 0, cxRightWidth: 0, cyTopHeight: 0, cyBottomHeight: 1 });
-            // Have Windows ask for the window's areas again.
-            let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
-    }
-
-    unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _: usize, _: usize) -> LRESULT {
-        // SAFETY: called by Windows with the window's own message; for WM_NCCALCSIZE with
-        // wparam set, lparam points at an NCCALCSIZE_PARAMS.
-        unsafe {
-            // A character with no key press for winit to pair it with (an IME commit
-            // sends these) is left to Windows' default handling, which answers with the
-            // system beep. The text itself already reached the app either way.
-            if msg == WM_CHAR || msg == WM_SYSCHAR {
-                let _ = DefSubclassProc(hwnd, msg, wparam, lparam);
-                return LRESULT(0);
-            }
-            if msg != WM_NCCALCSIZE || wparam.0 == 0 {
-                return DefSubclassProc(hwnd, msg, wparam, lparam);
-            }
-            let params = &mut *(lparam.0 as *mut NCCALCSIZE_PARAMS);
-            let proposed = params.rgrc[0];
-            let result = DefSubclassProc(hwnd, msg, wparam, lparam);
-            // winit's shift: the same rectangle a pixel lower. Anything else is its own
-            // sizing (maximized), kept.
-            let r = params.rgrc[0];
-            if (r.left, r.right, r.top, r.bottom) == (proposed.left, proposed.right, proposed.top + 1, proposed.bottom + 1) {
-                params.rgrc[0] = proposed;
-            }
-            result
-        }
-    }
 }

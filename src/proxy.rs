@@ -2,7 +2,7 @@
 //! the API and song streams, lyrics, translation, updates, the Spotify transfer,
 //! yt-dlp, the sign-in windows and Listen together.
 //!
-//! - System: whatever Windows is set to (Settings › Network › Proxy), else the
+//! - System: the
 //!   `HTTPS_PROXY`/`HTTP_PROXY` environment variables, else direct.
 //! - Off: always direct.
 //! - Custom: `http://host:port` or `socks5://host:port`, optionally `user:pass@`.
@@ -31,7 +31,7 @@ pub enum Setting {
 impl Setting {
     pub fn label(&self) -> &'static str {
         match self {
-            Setting::System => "Use Windows settings",
+            Setting::System => "Use system settings",
             Setting::Off => "No proxy",
             Setting::Custom(_) => "Custom",
         }
@@ -204,7 +204,7 @@ fn apply_with(b: reqwest::ClientBuilder, s: &Setting) -> reqwest::ClientBuilder 
             }
         },
         (Setting::Off, None) => b.no_proxy(),
-        // System with nothing set in Windows: reqwest still honours HTTPS_PROXY & co.
+        // System: reqwest still honours HTTPS_PROXY & co.
         _ => b,
     }
 }
@@ -276,29 +276,9 @@ async fn relay_one(client: &mut TcpStream) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A sign-in window's webview. WebView2 follows Windows' proxy by itself, so only a
-/// custom proxy, or none at all, needs saying. (Chromium takes no password here: an
-/// authenticated proxy asks for it in the window.) `unbound`: no device-bound sessions
-/// (see `login::run`).
+/// A sign-in window's webview. WKWebView follows the system proxy by itself, so there
+/// is nothing to set. `unbound`: no device-bound sessions (see `login::run`).
 pub fn webview(b: wry::WebViewBuilder<'_>, unbound: bool) -> wry::WebViewBuilder<'_> {
-    #[cfg(windows)]
-    {
-        use wry::WebViewBuilderExtWindows;
-        // wry's own defaults, which these arguments replace.
-        const DEFAULT: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
-        let features = if unbound { format!("{DEFAULT},DeviceBoundSessions,EnableBoundSessionCredentials") } else { DEFAULT.to_owned() };
-        match (active(), active().resolve()) {
-            (Setting::Off, _) => return b.with_additional_browser_args(format!("{features} --no-proxy-server")),
-            (Setting::Custom(_), Some(p)) => {
-                let scheme = if p.scheme().starts_with("socks") { "socks5" } else { p.scheme() };
-                let (host, port) = (p.host_str().unwrap_or_default(), p.port_or_known_default().unwrap_or(8080));
-                return b.with_additional_browser_args(format!("{features} --proxy-server={scheme}://{host}:{port}"));
-            }
-            _ if unbound => return b.with_additional_browser_args(features),
-            _ => {}
-        }
-    }
-    #[cfg(not(windows))]
     let _ = unbound;
     b
 }
@@ -403,47 +383,9 @@ fn env_proxy() -> Option<url::Url> {
         .and_then(|v| parse(&v).ok())
 }
 
-/// The proxy Windows is set to use (Settings › Network › Proxy › Manual), if on.
-/// Setup scripts (PAC) aren't read.
+/// The system proxy. Not read on macOS.
 pub fn system() -> Option<url::Url> {
-    #[cfg(windows)]
-    {
-        let (enabled, server) = windows_proxy()?;
-        if !enabled || server.trim().is_empty() {
-            return None;
-        }
-        // "host:port", or per protocol: "http=h:p;https=h:p;socks=h:p".
-        let pick = |key: &str| server.split(';').find_map(|part| part.trim().strip_prefix(key).map(str::to_owned));
-        let addr = if server.contains('=') {
-            pick("https=").or_else(|| pick("http=")).map(|a| format!("http://{a}")).or_else(|| pick("socks=").map(|a| format!("socks5://{a}")))?
-        } else {
-            format!("http://{}", server.trim())
-        };
-        parse(&addr).ok()
-    }
-    #[cfg(not(windows))]
     None
-}
-
-#[cfg(windows)]
-fn windows_proxy() -> Option<(bool, String)> {
-    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW};
-    use windows::core::w;
-    let key = w!(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings");
-    // SAFETY: out-buffers sized to what we pass; the strings are static.
-    unsafe {
-        let mut enabled = 0u32;
-        let mut size = 4u32;
-        let ok = RegGetValueW(HKEY_CURRENT_USER, key, w!("ProxyEnable"), RRF_RT_REG_DWORD, None, Some(&mut enabled as *mut u32 as *mut _), Some(&mut size));
-        if ok.is_err() {
-            return Some((false, String::new()));
-        }
-        let mut buf = [0u16; 1024];
-        let mut size = (buf.len() * 2) as u32;
-        let ok = RegGetValueW(HKEY_CURRENT_USER, key, w!("ProxyServer"), RRF_RT_REG_SZ, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut size));
-        let server = if ok.is_ok() { String::from_utf16_lossy(&buf[..(size as usize / 2).saturating_sub(1)]) } else { String::new() };
-        Some((enabled != 0, server))
-    }
 }
 
 /// Try a setting before saving it: one request through it to YouTube Music.

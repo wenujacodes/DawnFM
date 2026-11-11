@@ -72,7 +72,6 @@ pub enum Outcome {
 }
 
 /// Safari's user agent (macOS always reports 10_15_7 here, whatever the version).
-#[cfg(target_os = "macos")]
 const SAFARI_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
 
 /// Command-line flags that make the binary run only a sign-in window.
@@ -123,35 +122,19 @@ pub fn child_main(site: Site, profile_dir: PathBuf) {
     }
 }
 
-/// Put the webview in its window. On Linux it goes in the GTK box tao made for it:
-/// wry's plain `build` only works with an X11 window that already exists, and these
-/// start hidden (and Wayland has no such window at all).
+/// Put the webview in its window.
 pub trait BuildIn<'a> {
     fn build_in(self, window: &'a tao::window::Window) -> wry::Result<wry::WebView>;
 }
 
 impl<'a> BuildIn<'a> for WebViewBuilder<'a> {
     fn build_in(self, window: &'a tao::window::Window) -> wry::Result<wry::WebView> {
-        #[cfg(target_os = "linux")]
-        {
-            use tao::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            self.build_gtk(window.default_vbox().expect("tao makes a vbox by default"))
-        }
-        #[cfg(not(target_os = "linux"))]
         self.build(window)
     }
 }
 
-/// The cookies the browser would send to `url`.
-#[cfg(not(target_os = "macos"))]
-fn cookies_for(webview: &wry::WebView, url: &str) -> wry::Result<Vec<wry::cookie::Cookie<'static>>> {
-    webview.cookies_for_url(url)
-}
-
 /// On macOS wry's `cookies_for_url` keeps only cookies set for exactly the page's host, so
 /// Google's, set for `.youtube.com`, never came back and signing in never finished.
-#[cfg(target_os = "macos")]
 fn cookies_for(webview: &wry::WebView, url: &str) -> wry::Result<Vec<wry::cookie::Cookie<'static>>> {
     let host = url::Url::parse(url).ok().and_then(|u| u.host_str().map(str::to_owned)).unwrap_or_default();
     Ok(webview.cookies()?.into_iter().filter(|c| c.domain().is_some_and(|d| domain_matches(&host, d))).collect())
@@ -159,7 +142,6 @@ fn cookies_for(webview: &wry::WebView, url: &str) -> wry::Result<Vec<wry::cookie
 
 /// Whether a cookie for `domain` (".youtube.com", "youtube.com", "music.youtube.com")
 /// goes to `host`.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn domain_matches(host: &str, domain: &str) -> bool {
     let domain = domain.trim_start_matches('.').to_ascii_lowercase();
     let host = host.to_ascii_lowercase();
@@ -184,7 +166,6 @@ pub fn forget(profile_dir: &std::path::Path) {
 /// profile gets a data store of its own (macOS 14+; older ones share the default),
 /// named by an id kept in the folder. `forget` deletes the folder, so the next sign-in
 /// starts from a fresh store.
-#[cfg(target_os = "macos")]
 fn store_id(profile_dir: &std::path::Path) -> [u8; 16] {
     use sha1::Digest;
     let file = profile_dir.join("store-id");
@@ -210,11 +191,9 @@ fn run(site: Site, profile_dir: PathBuf) -> anyhow::Result<Outcome> {
         .build(&event_loop)?;
 
     let proxy = event_loop.create_proxy();
-    #[cfg(target_os = "macos")]
     let store = store_id(&profile_dir);
     let mut context = WebContext::new(Some(profile_dir));
     let builder = WebViewBuilder::new_with_web_context(&mut context);
-    #[cfg(target_os = "macos")]
     let builder = {
         use wry::WebViewBuilderExtDarwin;
         // WKWebView's own user agent has no "Version/… Safari/…", so YouTube Music takes it

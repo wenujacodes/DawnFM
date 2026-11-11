@@ -225,17 +225,7 @@ async fn call(http: &reqwest::Client, method: &str, params: &[(&str, &str)], sk:
 }
 
 fn open_browser(url: &str) {
-    #[cfg(windows)]
-    unsafe {
-        use windows::Win32::UI::Shell::ShellExecuteW;
-        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        use windows::core::{HSTRING, w};
-        ShellExecuteW(None, w!("open"), &HSTRING::from(url), None, None, SW_SHOWNORMAL);
-    }
-    #[cfg(target_os = "macos")]
     let _ = std::process::Command::new("open").arg(url).spawn();
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }
 
 #[cfg(test)]

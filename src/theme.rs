@@ -153,21 +153,6 @@ fn system_light() -> Option<bool> {
     }
 }
 
-#[cfg(windows)]
-fn read_system_light() -> Option<bool> {
-    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
-    use windows::core::w;
-    let mut v = 0u32;
-    let mut size = 4u32;
-    // SAFETY: a DWORD out-buffer of the size passed; the strings are static.
-    unsafe {
-        RegGetValueW(HKEY_CURRENT_USER, w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"), w!("AppsUseLightTheme"), RRF_RT_REG_DWORD, None, Some(&mut v as *mut u32 as *mut _), Some(&mut size))
-            .is_ok()
-            .then_some(v != 0)
-    }
-}
-
-#[cfg(not(windows))]
 fn read_system_light() -> Option<bool> {
     None
 }
@@ -190,29 +175,6 @@ pub fn system_accent() -> Option<Color32> {
     }
 }
 
-#[cfg(windows)]
-fn read_system_accent() -> Option<Color32> {
-    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD, RegGetValueW};
-    use windows::core::w;
-    // SAFETY: out-buffers sized to what we pass; the strings are static.
-    unsafe {
-        // Eight RGBA swatches, lightest first; the second is "light 2".
-        let mut palette = [0u8; 32];
-        let mut size = palette.len() as u32;
-        let key = w!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent");
-        if RegGetValueW(HKEY_CURRENT_USER, key, w!("AccentPalette"), RRF_RT_REG_BINARY, None, Some(palette.as_mut_ptr() as *mut _), Some(&mut size)).is_ok() && size >= 8 {
-            return Some(Color32::from_rgb(palette[4], palette[5], palette[6]));
-        }
-        // 0xAABBGGRR.
-        let mut abgr = 0u32;
-        let mut size = 4u32;
-        RegGetValueW(HKEY_CURRENT_USER, w!(r"Software\Microsoft\Windows\DWM"), w!("AccentColor"), RRF_RT_REG_DWORD, None, Some(&mut abgr as *mut u32 as *mut _), Some(&mut size))
-            .is_ok()
-            .then(|| Color32::from_rgb(abgr as u8, (abgr >> 8) as u8, (abgr >> 16) as u8))
-    }
-}
-
-#[cfg(not(windows))]
 fn read_system_accent() -> Option<Color32> {
     None
 }
@@ -542,19 +504,7 @@ pub fn installed_fonts(done: impl FnOnce() + Send + 'static) -> Option<&'static 
 }
 
 fn font_dirs() -> Vec<std::path::PathBuf> {
-    let mut dirs = Vec::new();
-    #[cfg(windows)]
-    {
-        let windir = std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into());
-        dirs.push(std::path::PathBuf::from(windir).join("Fonts"));
-        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            dirs.push(std::path::PathBuf::from(local).join("Microsoft\\Windows\\Fonts"));
-        }
-    }
-    #[cfg(target_os = "macos")]
-    dirs.extend(["/System/Library/Fonts", "/Library/Fonts"].map(Into::into));
-    #[cfg(all(unix, not(target_os = "macos")))]
-    dirs.extend(["/usr/share/fonts", "/usr/local/share/fonts"].map(Into::into));
+    let mut dirs: Vec<std::path::PathBuf> = ["/System/Library/Fonts", "/Library/Fonts"].map(Into::into).into();
     if let Some(home) = std::env::var_os("HOME") {
         dirs.push(std::path::PathBuf::from(home).join(".local/share/fonts"));
     }
@@ -649,39 +599,6 @@ fn load_choice(ui_font: &str) {
 // System fallbacks: egui's fonts cover Latin only, so CJK, Arabic, Indic, Thai,
 // symbols and emoji in titles would render as boxes. Memory-mapped, not read, so a
 // 20 MB CJK collection costs only the glyph pages actually drawn.
-#[cfg(windows)]
-const CANDIDATES: &[(&str, u32)] = &[
-    ("C:\\Windows\\Fonts\\segoeui.ttf", 0),   // Latin ext., Greek, Cyrillic, Arabic, Hebrew
-    ("C:\\Windows\\Fonts\\seguisym.ttf", 0),  // symbols, arrows, dingbats
-    ("C:\\Windows\\Fonts\\YuGothM.ttc", 0),   // Japanese
-    ("C:\\Windows\\Fonts\\msyh.ttc", 0),      // Simplified Chinese
-    ("C:\\Windows\\Fonts\\msjh.ttc", 0),      // Traditional Chinese
-    ("C:\\Windows\\Fonts\\malgun.ttf", 0),    // Korean
-    ("C:\\Windows\\Fonts\\Nirmala.ttc", 0),   // Indic scripts
-    ("C:\\Windows\\Fonts\\Nirmala.ttf", 0),
-    ("C:\\Windows\\Fonts\\LeelawUI.ttf", 0),  // Thai, Lao, Khmer
-    ("C:\\Windows\\Fonts\\ebrima.ttf", 0),    // Ethiopic, N'Ko, etc.
-    ("C:\\Windows\\Fonts\\seguiemj.ttf", 0),  // emoji (drawn monochrome)
-];
-
-/// Semibold and bold faces of the fallbacks, so text in a script the primary font
-/// lacks comes out at the weight the line asks for, not regular inside a bold title
-/// (Better Lyrics uses Noto Sans CJK at the lyric weight).
-#[cfg(windows)]
-const HEAVIER: &[(&str, [(&str, u32); 2])] = &[
-    ("C:\\Windows\\Fonts\\segoeui.ttf", [("C:\\Windows\\Fonts\\seguisb.ttf", 0), ("C:\\Windows\\Fonts\\segoeuib.ttf", 0)]),
-    ("C:\\Windows\\Fonts\\YuGothM.ttc", [("C:\\Windows\\Fonts\\YuGothB.ttc", 0), ("C:\\Windows\\Fonts\\YuGothB.ttc", 0)]),
-    ("C:\\Windows\\Fonts\\msyh.ttc", [("C:\\Windows\\Fonts\\msyhbd.ttc", 0), ("C:\\Windows\\Fonts\\msyhbd.ttc", 0)]),
-    ("C:\\Windows\\Fonts\\msjh.ttc", [("C:\\Windows\\Fonts\\msjhbd.ttc", 0), ("C:\\Windows\\Fonts\\msjhbd.ttc", 0)]),
-    ("C:\\Windows\\Fonts\\malgun.ttf", [("C:\\Windows\\Fonts\\malgunbd.ttf", 0), ("C:\\Windows\\Fonts\\malgunbd.ttf", 0)]),
-    ("C:\\Windows\\Fonts\\Nirmala.ttc", [("C:\\Windows\\Fonts\\Nirmala.ttc", 1), ("C:\\Windows\\Fonts\\Nirmala.ttc", 1)]),
-    ("C:\\Windows\\Fonts\\LeelawUI.ttf", [("C:\\Windows\\Fonts\\LeelaUIb.ttf", 0), ("C:\\Windows\\Fonts\\LeelaUIb.ttf", 0)]),
-    ("C:\\Windows\\Fonts\\ebrima.ttf", [("C:\\Windows\\Fonts\\ebrimabd.ttf", 0), ("C:\\Windows\\Fonts\\ebrimabd.ttf", 0)]),
-];
-#[cfg(not(windows))]
-const HEAVIER: &[(&str, [(&str, u32); 2])] = &[];
-
-#[cfg(target_os = "macos")]
 const CANDIDATES: &[(&str, u32)] = &[
     ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", 0),
     ("/System/Library/Fonts/Hiragino Sans GB.ttc", 0),
@@ -689,16 +606,8 @@ const CANDIDATES: &[(&str, u32)] = &[
     ("/System/Library/Fonts/Apple Symbols.ttf", 0),
 ];
 
-#[cfg(all(unix, not(target_os = "macos")))]
-const CANDIDATES: &[(&str, u32)] = &[
-    ("/usr/share/fonts/noto/NotoSans-Regular.ttf", 0),
-    ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf", 0),
-    ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0),
-    ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0),
-    ("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 0),
-    ("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf", 0),
-    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0),
-];
+/// Semibold and bold faces of the fallbacks (none listed on macOS).
+const HEAVIER: &[(&str, [(&str, u32); 2])] = &[];
 
 /// Ascent and line height in em, as egui lays text out (skrifa's metrics: OS/2 typo
 /// values when the font asks for them, else hhea).

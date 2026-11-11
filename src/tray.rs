@@ -23,7 +23,6 @@ pub enum Cmd {
 static PENDING: Mutex<Vec<Cmd>> = Mutex::new(Vec::new());
 
 pub struct Tray {
-    #[cfg(not(target_os = "linux"))]
     _icon: TrayIcon,
 }
 
@@ -47,20 +46,7 @@ impl Tray {
         });
 
         let png = icon.rgba(32).ok_or_else(|| anyhow::anyhow!("icon doesn't decode"))?;
-        #[cfg(not(target_os = "linux"))]
-        return Ok(Self { _icon: build(png)? });
-        #[cfg(target_os = "linux")]
-        {
-            gtk_thread::show(png)?;
-            Ok(Self {})
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl Drop for Tray {
-    fn drop(&mut self) {
-        gtk_thread::hide();
+        Ok(Self { _icon: build(png)? })
     }
 }
 
@@ -76,57 +62,6 @@ fn build(png: image::RgbaImage) -> anyhow::Result<TrayIcon> {
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .build()?)
-}
-
-#[cfg(target_os = "linux")]
-mod gtk_thread {
-    use std::cell::RefCell;
-    use std::sync::OnceLock;
-    use std::time::Duration;
-
-    use tray_icon::TrayIcon;
-
-    thread_local! {
-        static ICON: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
-    }
-
-    /// Start GTK's thread once; an error if GTK can't start (no display).
-    fn start() -> anyhow::Result<()> {
-        static STARTED: OnceLock<Result<(), String>> = OnceLock::new();
-        STARTED
-            .get_or_init(|| {
-                let (tx, rx) = std::sync::mpsc::channel();
-                std::thread::Builder::new()
-                    .name("gtk".into())
-                    .spawn(move || match gtk::init() {
-                        Ok(()) => {
-                            let _ = tx.send(Ok(()));
-                            gtk::main();
-                        }
-                        Err(e) => {
-                            let _ = tx.send(Err(e.to_string()));
-                        }
-                    })
-                    .map_err(|e| e.to_string())?;
-                rx.recv().map_err(|e| e.to_string())?
-            })
-            .clone()
-            .map_err(|e| anyhow::anyhow!("GTK: {e}"))
-    }
-
-    pub fn show(png: image::RgbaImage) -> anyhow::Result<()> {
-        start()?;
-        let (tx, rx) = std::sync::mpsc::channel();
-        gtk::glib::MainContext::default().invoke(move || {
-            let res = super::build(png).map(|icon| ICON.with(|i| *i.borrow_mut() = Some(icon)));
-            let _ = tx.send(res.map_err(|e| e.to_string()));
-        });
-        rx.recv_timeout(Duration::from_secs(5))?.map_err(|e| anyhow::anyhow!(e))
-    }
-
-    pub fn hide() {
-        gtk::glib::MainContext::default().invoke(|| ICON.with(|i| drop(i.borrow_mut().take())));
-    }
 }
 
 fn push(cmd: Cmd, wake: &impl Fn()) {

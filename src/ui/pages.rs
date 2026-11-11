@@ -1507,11 +1507,7 @@ fn settings_artists(app: &mut App, ui: &mut Ui) {
 fn settings_appearance(app: &mut App, ui: &mut Ui) {
     section_label(ui, "Appearance", None);
     settings_card(ui, |ui| {
-        let desc = if cfg!(windows) {
-            "Light or dark pages. System follows Windows' app mode. Now playing stays dark, over the album art."
-        } else {
-            "Light or dark pages. System follows your system's setting. Now playing stays dark, over the album art."
-        };
+        let desc = "Light or dark pages. System follows your system's setting. Now playing stays dark, over the album art.";
         let mut pick = None;
         setting_row(ui, "Mode", Some(desc), |ui| {
             let btn = dropdown_button(ui, app.appearance.label(), 160.0, "Mode");

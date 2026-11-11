@@ -12,18 +12,8 @@ use std::time::{Duration, SystemTime};
 
 use serde_json::Value;
 
-#[cfg(windows)]
-const BIN: &str = "yt-dlp.exe";
-#[cfg(not(windows))]
 const BIN: &str = "yt-dlp";
-#[cfg(all(windows, not(target_arch = "aarch64")))]
-const URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
-#[cfg(all(windows, target_arch = "aarch64"))]
-const URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_arm64.exe";
-#[cfg(target_os = "macos")]
 const URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
-#[cfg(all(unix, not(target_os = "macos")))]
-const URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
 
 const MAX_AGE: Duration = Duration::from_secs(7 * 24 * 3600);
 
@@ -50,7 +40,6 @@ async fn ensure(http: &reqwest::Client, data_dir: &Path) -> anyhow::Result<PathB
     anyhow::ensure!(bytes.len() > 1_000_000, "yt-dlp download looks truncated ({} bytes)", bytes.len());
     let tmp = bin.with_extension("part");
     std::fs::write(&tmp, &bytes)?;
-    #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
@@ -98,15 +87,8 @@ fn run(bin: &Path, data_dir: &Path, video_id: &str, cookie: &str) -> anyhow::Res
         .arg(&jar)
         .args(crate::proxy::ytdlp_args())
         .arg(format!("https://music.youtube.com/watch?v={video_id}"));
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
     // Its own process group, so the whole tree (the onefile binary unpacks into a child,
     // plus Node) can be ended together.
-    #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
@@ -124,16 +106,7 @@ fn run(bin: &Path, data_dir: &Path, video_id: &str, cookie: &str) -> anyhow::Res
             }
         }
         log::warn!("yt-dlp took too long; stopping it");
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            let mut kill = Command::new("taskkill");
-            kill.args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-            kill.creation_flags(0x0800_0000);
-            let _ = kill.status();
-        }
         // The process group it leads (see `process_group` above).
-        #[cfg(unix)]
         unsafe {
             libc::killpg(pid as libc::pid_t, libc::SIGKILL);
         }

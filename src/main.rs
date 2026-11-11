@@ -172,17 +172,9 @@ fn main() -> eframe::Result {
             ctx.add_bytes_loader(Arc::new(images::HttpImages::new(backend.clone())));
 
             let (media_tx, media_rx) = unbounded();
-            if let Some(h) = hwnd(cc) {
-                appicon::set_hwnd(h);
-                fullscreen::set_hwnd(h);
-                ui::set_titlebar_hwnd(h);
-                // eframe sets only the small icon; the taskbar button wants the big one.
-                appicon::set_window_icon(appicon::get(appicon::load(backend.data_dir())));
-            }
-            let media = media::Media::new(hwnd(cc), media_tx, wake);
+            let media = media::Media::new(None, media_tx, wake);
 
-            // Which GL driver this is, for reports of drawing problems (Windows on ARM runs
-            // GL through Mesa's D3D12 layer).
+            // Which GL driver this is, for reports of drawing problems.
             if let Some(gl) = &cc.gl {
                 use eframe::glow::HasContext;
                 // SAFETY: plain string queries on the current context.
@@ -219,20 +211,6 @@ fn main() -> eframe::Result {
         let _ = renderer::save(&data_dir(), renderer::Renderer::OpenGl);
     }
     run
-}
-
-#[cfg(windows)]
-fn hwnd(cc: &eframe::CreationContext) -> Option<*mut std::ffi::c_void> {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    match cc.window_handle().ok()?.as_raw() {
-        RawWindowHandle::Win32(h) => Some(h.hwnd.get() as *mut std::ffi::c_void),
-        _ => None,
-    }
-}
-
-#[cfg(not(windows))]
-fn hwnd(_: &eframe::CreationContext) -> Option<*mut std::ffi::c_void> {
-    None
 }
 
 /// Log to stderr in debug builds; release builds have no console, so log to a file

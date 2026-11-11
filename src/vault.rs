@@ -1,11 +1,8 @@
-//! Secrets (the Google and Spotify sign-ins) in the OS credential store: Windows
-//! Credential Manager, encrypted to the signed-in Windows user, on macOS the login
-//! Keychain, or on Linux the Secret Service (GNOME Keyring, KWallet).
+//! Secrets (the Google and Spotify sign-ins) in the macOS login Keychain.
 //!
-//! A credential holds at most 2,560 bytes and a Google cookie is close to that, so a
-//! secret is split over numbered entries: `name`, `name #2`, `name #3`, …
-//! Linux without a Secret Service running, a Keychain that refuses, and other
-//! systems keep the secret in a file only this user can read, in the data folder.
+//! A secret is split over numbered entries of at most 2,560 bytes: `name`,
+//! `name #2`, `name #3`, … When the Keychain refuses, the secret is kept in a file
+//! only this user can read, in the data folder.
 
 use std::path::Path;
 
@@ -23,18 +20,12 @@ fn key(name: &str, data_dir: &Path) -> String {
     }
 }
 
-#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 mod store {
-    /// Credential Manager's limit on one secret.
+    /// The size of one stored part.
     const CHUNK: usize = 2560;
     /// One store operation at a time: writes and deletes from several threads at once
     /// can be lost (stale parts were left behind in testing).
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    #[cfg(all(test, windows))]
-    pub fn tests_entry(key: &str, part: usize) -> keyring::Entry {
-        entry(key, part).unwrap()
-    }
 
     fn entry(key: &str, part: usize) -> keyring::Result<keyring::Entry> {
         let user = if part == 0 { key.to_owned() } else { format!("{key} #{}", part + 1) };
@@ -92,7 +83,6 @@ mod store {
     }
 }
 
-#[cfg(not(windows))]
 mod file {
     use std::path::{Path, PathBuf};
 
@@ -125,14 +115,11 @@ mod file {
     }
 }
 
-/// The store everywhere but Windows: the Keychain on macOS or the Secret Service on
-/// Linux when one answers, otherwise the file in `dir`.
-#[cfg(not(windows))]
-mod either {
+/// The Keychain when it answers, otherwise the file in `dir`.
+mod backend {
     use std::path::Path;
 
     pub fn get(key: &str, dir: &Path) -> anyhow::Result<Option<Vec<u8>>> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
         match super::store::get(key) {
             Ok(Some(s)) => return Ok(Some(s)),
             Ok(None) => {}
@@ -142,7 +129,6 @@ mod either {
     }
 
     pub fn set(key: &str, dir: &Path, secret: &[u8]) -> anyhow::Result<()> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
         match super::store::set(key, secret) {
             // Saved in the keyring: drop any copy an earlier run left in a file.
             Ok(()) => return super::file::delete(key, dir),
@@ -152,30 +138,10 @@ mod either {
     }
 
     pub fn delete(key: &str, dir: &Path) -> anyhow::Result<()> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
         if let Err(e) = super::store::delete(key) {
             log::debug!("credential store unavailable: {e:#}");
         }
         super::file::delete(key, dir)
-    }
-}
-
-#[cfg(not(windows))]
-use either as backend;
-
-/// Windows has only the Credential Manager; the data folder is just part of the key.
-#[cfg(windows)]
-mod backend {
-    use std::path::Path;
-
-    pub fn get(key: &str, _dir: &Path) -> anyhow::Result<Option<Vec<u8>>> {
-        super::store::get(key)
-    }
-    pub fn set(key: &str, _dir: &Path, secret: &[u8]) -> anyhow::Result<()> {
-        super::store::set(key, secret)
-    }
-    pub fn delete(key: &str, _dir: &Path) -> anyhow::Result<()> {
-        super::store::delete(key)
     }
 }
 
@@ -197,51 +163,8 @@ pub fn delete(name: &str, data_dir: &Path) {
     }
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
-    #[test]
-    fn round_trip_across_chunks() {
-        let key = &format!("ytm-rs vault test {}", std::process::id());
-        for len in [0, 10, 2560, 2561, 6000, 100] {
-            let secret: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
-            super::store::set(key, &secret).unwrap();
-            assert_eq!(super::store::get(key).unwrap().unwrap(), secret, "{len} bytes");
-        }
-        super::store::delete(key).unwrap();
-        assert!(super::store::get(key).unwrap().is_none());
-    }
-}
-
-#[cfg(all(test, windows))]
-mod stress {
-    #[test]
-    #[ignore]
-    fn parallel_stress() {
-        let pid = std::process::id();
-        let handles: Vec<_> = (0..4)
-            .map(|t| {
-                std::thread::spawn(move || {
-                    for round in 0..15 {
-                        let key = format!("ytm-rs stress {pid} {t}");
-                        super::store::set(&key, &vec![7u8; 6000]).unwrap();
-                        super::store::set(&key, &[7u8; 100]).unwrap();
-                        assert_eq!(super::store::get(&key).unwrap().unwrap().len(), 100, "round {round}");
-                        super::store::delete(&key).unwrap();
-                        for part in 0..3 {
-                            assert!(matches!(super::store::tests_entry(&key, part).get_secret(), Err(keyring::Error::NoEntry)), "thread {t} round {round} part {part} left");
-                        }
-                    }
-                })
-            })
-            .collect();
-        for h in handles {
-            h.join().unwrap();
-        }
-    }
-}
-
-#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
-mod unix_tests {
     #[test]
     fn round_trip_in_keyring_or_file() {
         let dir = std::env::temp_dir().join(format!("ytm-rs-vault-test-{}", std::process::id()));

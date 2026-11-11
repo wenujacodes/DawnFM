@@ -1,8 +1,4 @@
-//! OS media integration (Windows SMTC / MPRIS / macOS Now Playing) via souvlaki,
-//! plus the previous / play-pause / next buttons on the Windows taskbar thumbnail.
-
-#[cfg(windows)]
-mod thumbbar;
+//! macOS Now Playing integration via souvlaki.
 
 use std::sync::Arc;
 
@@ -13,8 +9,6 @@ pub struct Media {
     controls: MediaControls,
     /// The play state last sent, so the per-frame sync only reports changes.
     playing: Option<bool>,
-    #[cfg(windows)]
-    thumbbar: Option<Box<std::cell::RefCell<Option<thumbbar::ThumbBar>>>>,
 }
 
 impl Media {
@@ -36,15 +30,10 @@ impl Media {
             })
             .map_err(|e| log::warn!("media controls attach failed: {e:?}"))
             .ok()?;
-        #[cfg(windows)]
-        let thumbbar = hwnd.and_then(|h| thumbbar::ThumbBar::install(h, tx, wake));
-        #[cfg(not(windows))]
         let _ = (tx, wake);
         Some(Self {
             controls,
             playing: None,
-            #[cfg(windows)]
-            thumbbar,
         })
     }
 
@@ -59,7 +48,7 @@ impl Media {
     }
 
     /// Also called every frame with the player's state, so pausing from anywhere (a
-    /// headset, the Windows media flyout, a song ending) updates SMTC and the taskbar.
+    /// headset, Control Centre, a song ending) updates Now Playing.
     pub fn set_playing(&mut self, playing: bool) {
         if self.playing == Some(playing) {
             return;
@@ -70,9 +59,5 @@ impl Media {
         } else {
             MediaPlayback::Paused { progress: None }
         });
-        #[cfg(windows)]
-        if let Some(bar) = self.thumbbar.as_ref().and_then(|c| c.try_borrow_mut().ok()).as_mut().and_then(|b| b.as_mut()) {
-            bar.set_playing(playing);
-        }
     }
 }

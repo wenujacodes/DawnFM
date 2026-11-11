@@ -78,39 +78,12 @@ pub fn pick_folder(ctx: &egui::Context) {
 pub fn open_folder() {
     let dir = folder();
     let _ = std::fs::create_dir_all(&dir);
-    #[cfg(windows)]
-    let _ = std::process::Command::new("explorer").arg(dir).spawn();
-    #[cfg(target_os = "macos")]
     let _ = std::process::Command::new("open").arg(dir).spawn();
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
 }
 
-/// Open the song's folder in Explorer with the file selected.
+/// Reveal the song's file in Finder.
 pub fn show_file(path: &Path) {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("explorer").raw_arg(format!("/select,\"{}\"", path.display())).spawn();
-    }
-    // macOS: Finder reveals it.
-    #[cfg(target_os = "macos")]
     let _ = std::process::Command::new("open").arg("-R").arg(path).spawn();
-    // Linux: the file manager's ShowItems selects it (Nautilus, Dolphin, Nemo, …);
-    // without one, just open the folder.
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        let uri = url::Url::from_file_path(path).map(|u| u.to_string()).unwrap_or_default();
-        let shown = std::process::Command::new("dbus-send")
-            .args(["--session", "--print-reply", "--dest=org.freedesktop.FileManager1", "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems"])
-            .arg(format!("array:string:{uri}"))
-            .arg("string:")
-            .output()
-            .is_ok_and(|o| o.status.success());
-        if !shown && let Some(dir) = path.parent() {
-            let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
-        }
-    }
 }
 
 /// The song's file, if it's downloaded and still there.
