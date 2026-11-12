@@ -1467,8 +1467,8 @@ fn settings_lyrics(app: &mut App, ui: &mut Ui) {
         }
         // Source order: the first enabled source with lyrics for a song is shown; the
         // lyrics toolbar can pick another for that song.
-        setting_row(ui, "Lyrics sources", Some("Tried in this order. Switch one off to skip it; the toolbar under the lyrics picks a different one for a single song."), |_| {});
-        let n = app.lyric_prefs.order.len();
+        let open = fold_row(ui, "Lyrics sources", "Tried in this order. Switch one off to skip it; the toolbar under the lyrics picks a different one for a single song.");
+        let n = if open { app.lyric_prefs.order.len() } else { 0 };
         let mut swap: Option<(usize, usize)> = None;
         for i in 0..n {
             let (p, on) = app.lyric_prefs.order[i];
@@ -1653,7 +1653,9 @@ fn settings_connections(app: &mut App, ui: &mut Ui) {
 
 /// Settings › Keyboard shortcuts.
 fn settings_shortcuts(ui: &mut Ui) {
-    section_label(ui, "Keyboard shortcuts", None);
+    if !section_fold(ui, "Keyboard shortcuts") {
+        return;
+    }
     settings_card(ui, |ui| {
         let keys: &[(&str, &[&str])] = &[
             ("Play / pause", &["Space"]),
@@ -1662,7 +1664,8 @@ fn settings_shortcuts(ui: &mut Ui) {
             ("Search", &["⌘", "F"]),
             ("Lyrics panel", &["⌘", "L"]),
             ("Settings", &["⌘", ","]),
-            ("Mini player", &["⌘", "M"]),
+            ("Mini player", &["⌥", "⌘", "M"]),
+            ("Show or hide the sidebar", &["⌃", "⌘", "S"]),
             ("Lyrics in now playing", &["L"]),
             ("Queue", &["Q"]),
             ("Full-screen lyrics (in now playing)", &["F"]),
@@ -1943,6 +1946,52 @@ pub(super) fn section_label(ui: &mut Ui, title: &str, value: Option<&str>) {
         ui.painter().text(pos2(rect.right() - 2.0, rect.center().y), Align2::RIGHT_CENTER, v, theme::semibold(13.0), theme::text_dim());
     }
     ui.add_space(10.0);
+}
+
+/// Whether a folding part of Settings is open (remembered; closed at first).
+fn fold_state(ui: &Ui, key: &str) -> (egui::Id, bool) {
+    let id = egui::Id::unique(("settings-fold", key));
+    (id, ui.data_mut(|d| *d.get_persisted_mut_or_default::<bool>(id)))
+}
+
+/// A chevron that turns as `open` animates.
+fn chevron(ui: &Ui, at: egui::Pos2, id: egui::Id, open: bool, color: Color32) {
+    let k = theme::anim_bool(ui.ctx(), id.with("turn"), open, 0.18);
+    widgets::icon_at(ui, at, if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 16.0, color);
+}
+
+/// A section heading that folds its section away; a click toggles it. True when open.
+fn section_fold(ui: &mut Ui, title: &str) -> bool {
+    let (id, mut open) = fold_state(ui, title);
+    ui.add_space(30.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
+    let resp = named(resp, title).on_hover_cursor(egui::CursorIcon::PointingHand);
+    if resp.clicked() {
+        open = !open;
+        ui.data_mut(|d| d.insert_persisted(id, open));
+    }
+    let h = theme::anim_bool(ui.ctx(), id.with("h"), resp.hovered(), 0.15);
+    ui.painter().text(pos2(rect.left() + 2.0, rect.center().y), Align2::LEFT_CENTER, title, theme::bold(17.0), theme::text());
+    chevron(ui, pos2(rect.right() - 10.0, rect.center().y), id, open, theme::lerp_color(theme::text_dim(), theme::text(), h));
+    ui.add_space(10.0);
+    open
+}
+
+/// A settings row whose list below folds away; a click on the row toggles it. True when open.
+fn fold_row(ui: &mut Ui, title: &str, desc: &str) -> bool {
+    let (id, mut open) = fold_state(ui, title);
+    let top = ui.cursor().top();
+    setting_row(ui, title, Some(desc), |ui| {
+        let (r, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
+        chevron(ui, r.center(), id, open, theme::text_dim());
+    });
+    let rect = Rect::from_min_max(pos2(ui.max_rect().left(), top), pos2(ui.max_rect().right(), ui.cursor().top()));
+    let resp = named(ui.interact(rect, id.with("row"), Sense::click()), title).on_hover_cursor(egui::CursorIcon::PointingHand);
+    if resp.clicked() {
+        open = !open;
+        ui.data_mut(|d| d.insert_persisted(id, open));
+    }
+    open
 }
 
 pub(super) fn settings_card(ui: &mut Ui, body: impl FnOnce(&mut Ui)) {
