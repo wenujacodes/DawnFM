@@ -24,6 +24,7 @@ mod lastfm;
 mod login;
 mod lyrics;
 mod media;
+mod menubar;
 mod model;
 mod notify;
 mod motion;
@@ -151,6 +152,8 @@ fn main() -> eframe::Result {
             deeplink::listen(wake);
             // The Dock icon's menu: winit's delegate is set up by now.
             dock::install(wake);
+            // The Mac menu bar (Dusk FM, Controls, View, Window, Help).
+            menubar::install(wake);
             // Keep `ytm-rs:` links pointing at this copy; dev builds leave it alone
             // (even with YTM_UPDATE_FORCE).
             if update::installed() && !cfg!(debug_assertions) {

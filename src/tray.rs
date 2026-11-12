@@ -12,7 +12,7 @@
 use crate::sync::MutexExt;
 use std::sync::{Mutex, Once};
 
-use tray_icon::menu::{Menu, MenuEvent, MenuItem};
+use tray_icon::menu::{Menu, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,7 +29,7 @@ pub struct Tray {
 
 impl Tray {
     /// `wake` is called (from the UI thread's message loop) after each click.
-    pub fn new(icon: &crate::appicon::Variant, wake: impl Fn() + Send + Sync + Clone + 'static) -> anyhow::Result<Self> {
+    pub fn new(wake: impl Fn() + Send + Sync + Clone + 'static) -> anyhow::Result<Self> {
         // The handlers are process-wide and can only be set once.
         static HANDLERS: Once = Once::new();
         HANDLERS.call_once(|| {
@@ -39,15 +39,10 @@ impl Tray {
                     push(Cmd::Show, &w);
                 }
             }));
-            MenuEvent::set_event_handler(Some(move |e: MenuEvent| match e.id.as_ref() {
-                "show" => push(Cmd::Show, &wake),
-                "quit" => push(Cmd::Quit, &wake),
-                _ => {}
-            }));
+            // Its menu's Show and Quit go through the menu bar's handler (`menubar`).
+            let _ = &wake;
         });
-
-        let png = icon.rgba(32).ok_or_else(|| anyhow::anyhow!("icon doesn't decode"))?;
-        Ok(Self { _icon: build(png)? })
+        Ok(Self { _icon: build(template_icon()?)? })
     }
 }
 
@@ -58,14 +53,26 @@ fn build(png: image::RgbaImage) -> anyhow::Result<TrayIcon> {
     ])?;
     let (w, h) = png.dimensions();
     Ok(TrayIconBuilder::new()
-        .with_icon(tray_icon::Icon::from_rgba(png.into_raw(), w, h)?)
+        // Drawn by macOS in the menu bar's own colour, like other menu bar icons.
+        .with_icon_templated(tray_icon::Icon::from_rgba(png.into_raw(), w, h)?)
         .with_tooltip("Dusk FM")
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .build()?)
 }
 
-fn push(cmd: Cmd, wake: &impl Fn()) {
+/// The app's mark (a setting sun), centred on a square for the menu bar.
+fn template_icon() -> anyhow::Result<image::RgbaImage> {
+    const MARK: &[u8] = include_bytes!("../assets/icon/mark.png");
+    let mark = image::load_from_memory(MARK)?.into_rgba8();
+    let side = 44;
+    let fit = image::imageops::resize(&mark, side, side * mark.height() / mark.width(), image::imageops::FilterType::Lanczos3);
+    let mut out = image::RgbaImage::new(side, side);
+    image::imageops::overlay(&mut out, &fit, 0, i64::from((side - fit.height()) / 2));
+    Ok(out)
+}
+
+pub(crate) fn push(cmd: Cmd, wake: &impl Fn()) {
     PENDING.lock_unpoisoned().push(cmd);
     wake();
 }

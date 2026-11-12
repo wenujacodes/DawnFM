@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crate::backend;
 
-use super::{App, dev_var, notes, updatable};
+use super::{Action, App, NpTab, Page, dev_var, notes, updatable};
 
 impl App {
     pub(super) fn set_discord_enabled(&mut self, enabled: bool) {
@@ -98,6 +98,40 @@ impl App {
     }
 
     /// The Dock menu: show what's playing, and act on its clicks like the media keys.
+    /// The menu bar's commands (`menubar`).
+    pub(super) fn sync_menubar(&mut self, ctx: &egui::Context) {
+        use crate::menubar::Cmd;
+        for cmd in crate::menubar::take() {
+            match cmd {
+                Cmd::Settings => {
+                    self.np_open = false;
+                    self.go(Page::Settings);
+                }
+                Cmd::Quit => self.quit(ctx),
+                Cmd::Toggle => self.toggle(),
+                Cmd::Next => self.next(),
+                Cmd::Prev => self.prev(),
+                Cmd::VolumeUp | Cmd::VolumeDown => {
+                    let step = if cmd == Cmd::VolumeUp { 0.05 } else { -0.05 };
+                    self.audio.set_volume((self.audio.volume() + step).clamp(0.0, 1.0));
+                }
+                Cmd::Lyrics => self.toggle_lyrics(),
+                Cmd::UpNext => {
+                    if self.np_open {
+                        self.np_tab = if self.np_tab == NpTab::UpNext { NpTab::Art } else { NpTab::UpNext };
+                    } else {
+                        self.queue_open = !self.queue_open;
+                        if self.queue_open {
+                            self.lyrics_drawer = false;
+                        }
+                    }
+                }
+                Cmd::Mini => self.actions.push(Action::Mini(!self.mini.target())),
+                Cmd::Sidebar => self.sidebar_collapsed = !self.sidebar_collapsed,
+            }
+        }
+    }
+
     pub(super) fn sync_dock(&mut self) {
         crate::dock::set_state(self.playing_track().map(|t| t.title.as_str()), self.playing() || self.buffering);
         for cmd in crate::dock::take() {
@@ -195,7 +229,7 @@ impl App {
     pub(super) fn tray_window(&mut self, ctx: &egui::Context) {
         if ctx.input(|i| i.viewport().close_requested()) && self.close_to_tray && !self.exiting {
             let c = ctx.clone();
-            match crate::tray::Tray::new(crate::appicon::get(self.app_icon), move || c.request_repaint()) {
+            match crate::tray::Tray::new(move || c.request_repaint()) {
                 Ok(t) => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));

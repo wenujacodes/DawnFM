@@ -525,7 +525,6 @@ pub struct App {
     /// Settings › Window: draw with wgpu (Vulkan) from the next start (renderer.rs).
     pub(super) wgpu_renderer: bool,
     /// The app icon (`appicon::ALL` id) shown on the window and in the tray.
-    app_icon: &'static str,
     /// The tray icon, while the window is hidden.
     tray: Option<crate::tray::Tray>,
     /// Closing for real (Quit from the tray, restart to update): don't hide.
@@ -683,7 +682,6 @@ impl App {
             notify_songs: get("notify_songs").is_some_and(|v| v == "1"),
             notified: None,
             wgpu_renderer,
-            app_icon,
             tray: None,
             exiting: false,
             window_hidden: false,
@@ -1210,6 +1208,7 @@ impl eframe::App for App {
         self.sync_discord();
         self.sync_lastfm();
         self.sync_dock();
+        self.sync_menubar(ctx);
         self.sync_notify(ctx);
         self.sync_server_queue(ctx, now);
         self.tick_sleep(ctx);

@@ -1,5 +1,5 @@
 //! The mini player: the same window, shrunk to a strip with the song, the transport and a
-//! seek line, kept above other windows unless unpinned. ⌘M or the player bar's
+//! seek line, kept above other windows unless unpinned. ⌥⌘M or the player bar's
 //! button switches; the strip's expand button (or a double-click on it) switches back.
 //!
 //! Each mode keeps its own place: the full window goes back to exactly where it was
@@ -221,7 +221,7 @@ impl Mini {
         self.wanted.take()
     }
 
-    /// Where it's headed once queued switches are done: what ⌘M flips.
+    /// Where it's headed once queued switches are done: what ⌥⌘M flips.
     pub fn target(&self) -> bool {
         self.wanted.unwrap_or_else(|| self.active())
     }
@@ -560,7 +560,7 @@ pub fn strip(app: &mut App, ui: &mut Ui, now: f64) {
             CloseButton::Expand => app.actions.push(Action::Mini(false)),
         }
     }
-    if top_btn(ui, icon::MAXIMIZE_2, "full", "Full window (⌘M)", false, false) {
+    if top_btn(ui, icon::MAXIMIZE_2, "full", "Full window (⌥⌘M)", false, false) {
         app.actions.push(Action::Mini(false));
     }
     let pinned = app.mini.pinned;

@@ -260,7 +260,7 @@ impl App {
                 cmd(egui::Key::ArrowUp),
                 cmd(egui::Key::ArrowDown),
                 // Once per press: holding it doesn't flip back and forth.
-                i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::M, pressed: true, repeat: false, modifiers, .. } if modifiers.command)),
+                i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::M, pressed: true, repeat: false, modifiers, .. } if modifiers.command && modifiers.alt)),
                 cmd(egui::Key::L),
                 i.modifiers.command && i.key_pressed(egui::Key::Comma),
             )
