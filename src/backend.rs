@@ -1146,11 +1146,12 @@ impl Backend {
                         match ytm::report_play(&this.api, &id, sts.as_ref().ok().copied()).await {
                             Ok(w) => {
                                 log::debug!("reported play of {id}");
+                                unreported(&id, None);
                                 this.report_watchtime(&id, generation, w).await;
                             }
                             Err(e) => match sts {
-                                Err(s) => log::warn!("couldn't report play of {id}: {:#}", e.context(format!("no signature timestamp: {s:#}"))),
-                                Ok(_) => log::warn!("couldn't report play of {id}: {e:#}"),
+                                Err(s) => unreported(&id, Some(e.context(format!("no signature timestamp: {s:#}")))),
+                                Ok(_) => unreported(&id, Some(e)),
                             },
                         }
                     });
@@ -1670,6 +1671,22 @@ impl Backend {
 /// `YTM_REPORT_PLAYS` is set.
 fn reports_plays() -> bool {
     std::env::var_os("YTM_BACKGROUND").is_none() || std::env::var_os("YTM_REPORT_PLAYS").is_some()
+}
+
+/// Log a play that couldn't be reported (`Some`), or that one was (`None`). A failure
+/// that goes on (every song refused the same way) is a warning the first time only, until
+/// a play is reported again.
+fn unreported(id: &str, e: Option<anyhow::Error>) {
+    static LAST: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+    let mut last = LAST.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(e) = e else { return last.clear() };
+    let msg = format!("{e:#}");
+    if *last == msg {
+        log::debug!("couldn't report play of {id}: {msg}");
+    } else {
+        log::warn!("couldn't report play of {id}: {msg}");
+        *last = msg;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
