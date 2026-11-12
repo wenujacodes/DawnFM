@@ -237,37 +237,43 @@ impl App {
 
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
         let typing = ctx.egui_wants_keyboard_input();
-        // In a text box, Ctrl+arrows move the cursor by words (and lines) instead; on a
-        // focused button or slider they still skip and change the volume.
+        // In a text box, ⌘ with the arrows moves the cursor to line ends (and the text's
+        // ends) instead; on a focused button or slider they still skip and change the volume.
         let editing = ctx.text_edit_focused();
         let i = ctx.input(|i| {
-            let k = |key| !typing && i.key_pressed(key);
-            let ctrl = |key| !editing && i.modifiers.ctrl && i.key_pressed(key);
+            // Plain keys only: ⌘L and ⌘F are their own shortcuts, ⌘Q quits.
+            let k = |key| !typing && !i.modifiers.command && i.key_pressed(key);
+            // ⌘ on macOS (`command` is Ctrl elsewhere).
+            let cmd = |key| !editing && i.modifiers.command && i.key_pressed(key);
             (
                 k(egui::Key::Space),
                 i.pointer.button_pressed(egui::PointerButton::Extra1)
                     || (i.modifiers.alt && i.key_pressed(egui::Key::ArrowLeft)),
                 i.pointer.button_pressed(egui::PointerButton::Extra2)
                     || (i.modifiers.alt && i.key_pressed(egui::Key::ArrowRight)),
-                ctrl(egui::Key::ArrowRight),
-                ctrl(egui::Key::ArrowLeft),
+                cmd(egui::Key::ArrowRight),
+                cmd(egui::Key::ArrowLeft),
                 k(egui::Key::L),
                 k(egui::Key::Q),
                 k(egui::Key::F),
                 i.key_pressed(egui::Key::Escape),
-                ctrl(egui::Key::ArrowUp),
-                ctrl(egui::Key::ArrowDown),
+                cmd(egui::Key::ArrowUp),
+                cmd(egui::Key::ArrowDown),
                 // Once per press: holding it doesn't flip back and forth.
-                i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::M, pressed: true, repeat: false, modifiers, .. } if modifiers.ctrl)),
+                i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::M, pressed: true, repeat: false, modifiers, .. } if modifiers.command)),
+                cmd(egui::Key::L),
+                i.modifiers.command && i.key_pressed(egui::Key::Comma),
             )
         });
-        let (space, back, fwd, next, prev, lyr, queue, full, esc, vol_up, vol_down, mini) = i;
+        let (space, back, fwd, next, prev, lyr, queue, full, esc, vol_up, vol_down, mini, lyr_panel, settings) = i;
         if mini {
             self.actions.push(Action::Mini(!self.mini.target()));
         }
         // The mini player has no pages or now playing to go to, nor does a window on
         // its way back until it's there.
-        let (back, fwd, lyr, queue, full, esc) = if self.mini.busy() { (false, false, false, false, false, false) } else { (back, fwd, lyr, queue, full, esc) };
+        let busy = self.mini.busy();
+        let (back, fwd, lyr, queue, full, esc, lyr_panel, settings) =
+            if busy { Default::default() } else { (back, fwd, lyr, queue, full, esc, lyr_panel, settings) };
         if space {
             self.toggle();
         }
@@ -287,6 +293,13 @@ impl App {
             self.np_open = true;
             self.np_tab = NpTab::Lyrics;
         }
+        if lyr_panel {
+            self.toggle_lyrics();
+        }
+        if settings {
+            self.np_open = false;
+            self.go(Page::Settings);
+        }
         if queue && self.current().is_some() {
             self.np_open = true;
             self.np_tab = NpTab::UpNext;
@@ -301,9 +314,25 @@ impl App {
                 self.np_open = false;
             }
         }
-        if vol_up || vol_down {
+    if vol_up || vol_down {
             let v = (self.audio.volume() + if vol_up { 0.05 } else { -0.05 }).clamp(0.0, 1.0);
             self.audio.set_volume(v);
+        }
+    }
+
+    /// The player bar's lyrics button (and ⌘L): now playing's lyrics while it's up,
+    /// otherwise the lyrics panel beside the pages, in Up next's place.
+    pub(super) fn toggle_lyrics(&mut self) {
+        let on = if self.np_open { self.np_tab == NpTab::Lyrics && !self.no_lyrics() } else { self.lyrics_drawer && !self.queue_open };
+        if self.np_open {
+            if on {
+                self.np_open = false;
+            } else {
+                self.np_tab = NpTab::Lyrics;
+            }
+        } else {
+            self.lyrics_drawer = !on;
+            self.queue_open = false;
         }
     }
 

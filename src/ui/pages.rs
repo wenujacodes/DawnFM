@@ -1640,13 +1640,16 @@ fn settings_shortcuts(ui: &mut Ui) {
     settings_card(ui, |ui| {
         let keys: &[(&str, &[&str])] = &[
             ("Play / pause", &["Space"]),
-            ("Next / previous song", &["Ctrl", "→ / ←"]),
-            ("Volume up / down", &["Ctrl", "↑ / ↓"]),
-            ("Search", &["Ctrl", "F"]),
-            ("Lyrics", &["L"]),
+            ("Next / previous song", &["⌘", "→ / ←"]),
+            ("Volume up / down", &["⌘", "↑ / ↓"]),
+            ("Search", &["⌘", "F"]),
+            ("Lyrics panel", &["⌘", "L"]),
+            ("Settings", &["⌘", ","]),
+            ("Mini player", &["⌘", "M"]),
+            ("Lyrics in now playing", &["L"]),
             ("Queue", &["Q"]),
             ("Full-screen lyrics (in now playing)", &["F"]),
-            ("Back / forward", &["Alt", "← / →"]),
+            ("Back / forward", &["⌥", "← / →"]),
             ("Close now playing", &["Esc"]),
         ];
         for (i, (what, combo)) in keys.iter().enumerate() {
