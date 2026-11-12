@@ -1,6 +1,6 @@
 //! Automatic updates from GitHub releases.
 //!
-//! The app checks the latest release of wenujacodes/DuskFM at startup and
+//! The app checks the latest release of wenujacodes/DawnFM at startup and
 //! every few hours. A copy installed from the disk image downloads the new `.dmg` and
 //! puts the app from it in place of its own as it closes, or right away when the user
 //! picks "Restart to update". The portable build (a `portable.txt` inside the app
@@ -18,12 +18,12 @@ use crate::sync::MutexExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const LATEST: &str = "https://api.github.com/repos/wenujacodes/DuskFM/releases/latest";
-const BY_TAG: &str = "https://api.github.com/repos/wenujacodes/DuskFM/releases/tags/v";
-pub const RELEASES: &str = "https://github.com/wenujacodes/DuskFM/releases";
+const LATEST: &str = "https://api.github.com/repos/wenujacodes/DawnFM/releases/latest";
+const BY_TAG: &str = "https://api.github.com/repos/wenujacodes/DawnFM/releases/tags/v";
+pub const RELEASES: &str = "https://github.com/wenujacodes/DawnFM/releases";
 /// The app bundle in a release download (made by `macos/bundle.sh`), and its binary.
-const APP: &str = "Dusk FM.app";
-const BIN_IN_APP: &str = "Contents/MacOS/duskfm";
+const APP: &str = "Dawn FM.app";
+const BIN_IN_APP: &str = "Contents/MacOS/dawnfm";
 
 /// Release notes by version: `None` while fetching or when there are none.
 type Notes = Arc<Mutex<std::collections::HashMap<String, Option<String>>>>;
@@ -61,7 +61,7 @@ pub fn installed() -> bool {
     bundle_of(&exe).is_some() && portable_dir().is_none()
 }
 
-/// The `.app` bundle a binary is in (`X.app/Contents/MacOS/duskfm`).
+/// The `.app` bundle a binary is in (`X.app/Contents/MacOS/dawnfm`).
 fn bundle_of(exe: &Path) -> Option<&Path> {
     exe.ancestors().nth(3).filter(|a| a.extension().is_some_and(|x| x == "app"))
 }
@@ -69,7 +69,7 @@ fn bundle_of(exe: &Path) -> Option<&Path> {
 /// The release asset this copy updates from, as the release workflow names it.
 fn asset_name(version: &str) -> String {
     let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
-    if portable_dir().is_some() { format!("DuskFM-{version}-macos-{arch}-portable.zip") } else { format!("DuskFM-{version}-macos-{arch}.dmg") }
+    if portable_dir().is_some() { format!("DawnFM-{version}-macos-{arch}-portable.zip") } else { format!("DawnFM-{version}-macos-{arch}.dmg") }
 }
 
 /// The portable build's folder: the download ships a `portable.txt` beside the exe
@@ -267,7 +267,7 @@ impl Updater {
                 }
             }
         }
-        let unpacked = self.dir.join(format!("duskfm-{version}"));
+        let unpacked = self.dir.join(format!("dawnfm-{version}"));
         let ready = if !portable { open_dmg(&path, &unpacked)? } else { unzip_exe(&path, &unpacked)? };
         log::info!("update: {version} ready at {}", ready.display());
         Ok(State::Ready { version, installer: ready })
@@ -289,7 +289,7 @@ impl Updater {
 /// process keeps its copy open until it exits; the next launch runs the new one.
 fn replace_binary(new: &Path, exe: &Path, relaunch: bool) {
     use std::os::unix::fs::PermissionsExt;
-    let tmp = exe.with_file_name(".duskfm.new");
+    let tmp = exe.with_file_name(".dawnfm.new");
     if std::env::var_os("YTM_UPDATE_DRYRUN").is_some() {
         log::info!("update (dry run): {} over {}", new.display(), exe.display());
         return;
@@ -314,7 +314,10 @@ fn replace_binary(new: &Path, exe: &Path, relaunch: bool) {
 /// one until it exits.
 fn replace_bundle(new: &Path, app: &Path, relaunch: bool) {
     let parent = app.parent().unwrap_or(Path::new("/"));
-    let (tmp, old) = (parent.join(".duskfm.app.new"), parent.join(".duskfm.app.old"));
+    let (tmp, old) = (parent.join(".dawnfm.app.new"), parent.join(".dawnfm.app.old"));
+    // A copy still under an earlier name ("Dusk FM.app") comes back as Dawn FM.app.
+    let renamed = parent.join(APP);
+    let dest = if app.file_name() != renamed.file_name() && !renamed.exists() { renamed } else { app.to_path_buf() };
     if std::env::var_os("YTM_UPDATE_DRYRUN").is_some() {
         log::info!("update (dry run): {} in place of {}", new.display(), app.display());
         return;
@@ -331,16 +334,16 @@ fn replace_bundle(new: &Path, app: &Path, relaunch: bool) {
         let _ = std::fs::remove_dir_all(&tmp);
         return log::warn!("update: couldn't move {} aside: {e}", app.display());
     }
-    if let Err(e) = std::fs::rename(&tmp, app) {
+    if let Err(e) = std::fs::rename(&tmp, &dest) {
         let _ = std::fs::rename(&old, app);
         let _ = std::fs::remove_dir_all(&tmp);
         return log::warn!("update: couldn't put the new version in place: {e}");
     }
     let _ = std::fs::remove_dir_all(&old);
-    log::info!("update: replaced {}", app.display());
+    log::info!("update: replaced {} with {}", app.display(), dest.display());
     if relaunch {
         // Once this process has saved and exited.
-        let quoted = app.display().to_string().replace('\'', r"'\''");
+        let quoted = dest.display().to_string().replace('\'', r"'\''");
         run_detached(&format!("sleep 2; open '{quoted}'"));
     }
 }
@@ -403,7 +406,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn client() -> anyhow::Result<reqwest::Client> {
-    Ok(crate::proxy::apply(reqwest::Client::builder()).user_agent(concat!("DuskFM/", env!("CARGO_PKG_VERSION"))).connect_timeout(std::time::Duration::from_secs(10)).read_timeout(std::time::Duration::from_secs(30)).build()?)
+    Ok(crate::proxy::apply(reqwest::Client::builder()).user_agent(concat!("DawnFM/", env!("CARGO_PKG_VERSION"))).connect_timeout(std::time::Duration::from_secs(10)).read_timeout(std::time::Duration::from_secs(30)).build()?)
 }
 
 #[cfg(test)]
@@ -459,7 +462,7 @@ mod tests {
             return;
         }
         let dmg = root.join("app.dmg");
-        run(std::process::Command::new("hdiutil").args(["create", "-quiet", "-volname", "Dusk FM", "-format", "UDZO", "-srcfolder"]).arg(&src).arg(&dmg));
+        run(std::process::Command::new("hdiutil").args(["create", "-quiet", "-volname", "Dawn FM", "-format", "UDZO", "-srcfolder"]).arg(&src).arg(&dmg));
         let exe = super::open_dmg(&dmg, &root.join("from-dmg")).unwrap();
         assert!(exe.is_file(), "{}", exe.display());
 

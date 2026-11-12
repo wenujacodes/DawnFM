@@ -48,14 +48,14 @@ impl Tray {
 
 fn build(png: image::RgbaImage) -> anyhow::Result<TrayIcon> {
     let menu = Menu::with_items(&[
-        &MenuItem::with_id("show", "Show Dusk FM", true, None),
+        &MenuItem::with_id("show", "Show Dawn FM", true, None),
         &MenuItem::with_id("quit", "Quit", true, None),
     ])?;
     let (w, h) = png.dimensions();
     Ok(TrayIconBuilder::new()
         // Drawn by macOS in the menu bar's own colour, like other menu bar icons.
         .with_icon_templated(tray_icon::Icon::from_rgba(png.into_raw(), w, h)?)
-        .with_tooltip("Dusk FM")
+        .with_tooltip("Dawn FM")
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .build()?)

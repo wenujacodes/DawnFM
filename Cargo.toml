@@ -1,10 +1,10 @@
 [package]
-name = "duskfm"
+name = "dawnfm"
 version = "2.1.0"
 edition = "2024"
 license = "GPL-3.0-only"
-repository = "https://github.com/wenujacodes/DuskFM"
-description = "Dusk FM: a native YouTube Music app for macOS"
+repository = "https://github.com/wenujacodes/DawnFM"
+description = "Dawn FM: a native YouTube Music app for macOS"
 
 [dependencies]
 anyhow = "1.0.104"
@@ -72,6 +72,6 @@ panic = "unwind"
 opt-level = 2
 
 # egui with a smaller trackpad bounce at the ends of scrollers (see
-# vendor/egui/src/containers/scroll_physics.rs, the three "Dusk FM" constants).
+# vendor/egui/src/containers/scroll_physics.rs, the three "Dawn FM" constants).
 [patch.crates-io]
 egui = { path = "vendor/egui" }

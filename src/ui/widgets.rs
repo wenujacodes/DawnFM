@@ -1030,8 +1030,8 @@ pub fn shimmer_band(ui: &Ui, r: Rect, radius: f32, time: f64) {
 
 /// Paint a remote image into `rect`: the skeleton's shimmer while it downloads (not
 /// egui's spinner), then a quick fade-in. One already loaded just shows.
-/// Dusk FM's own Liked Music cover, in place of YouTube Music's stock one.
-const LIKED_ART: &str = "bytes://duskfm/liked.png";
+/// Dawn FM's own Liked Music cover, in place of YouTube Music's stock one.
+const LIKED_ART: &str = "bytes://dawnfm/liked.png";
 
 /// The image to load for `url`: the app's Liked Music cover for YouTube's, else `url`.
 fn own_art<'a>(ctx: &egui::Context, url: &'a str) -> &'a str {

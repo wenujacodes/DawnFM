@@ -79,7 +79,7 @@ mod mac {
     define_class!(
         // SAFETY: a plain NSObject subclass with no ivars and no Drop.
         #[unsafe(super(NSObject))]
-        #[name = "DuskFMDockTarget"]
+        #[name = "DawnFMDockTarget"]
         pub(super) struct Target;
 
         impl Target {

@@ -439,14 +439,14 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 52.0), Sense::click());
             let mut resp = named(resp, "Restart to update").on_hover_cursor(egui::CursorIcon::PointingHand);
             if collapsed {
-                resp = resp.on_hover_text(format!("Restart to update to Dusk FM {v}"));
+                resp = resp.on_hover_text(format!("Restart to update to Dawn FM {v}"));
             }
             let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
             ui.painter().rect_filled(rect, 12.0, theme::with_alpha(look.accent, 0.22 + 0.12 * h));
             glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), LUCIDE, glyphs::SPARKLES, theme::text());
             if a > 0.0 {
                 ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 17.0), Align2::LEFT_CENTER, "Restart to update", theme::semibold(13.5), theme::with_alpha(theme::text(), a));
-                ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 35.0), Align2::LEFT_CENTER, format!("Dusk FM {v}"), theme::regular(12.0), theme::with_alpha(theme::text(), 0.75 * a));
+                ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 35.0), Align2::LEFT_CENTER, format!("Dawn FM {v}"), theme::regular(12.0), theme::with_alpha(theme::text(), 0.75 * a));
             }
             restart = resp.clicked();
         }
@@ -1014,7 +1014,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     // the times, which take the same row so nothing overlaps.
     let (title, _) = match &track {
         Some(t) => (t.title.clone(), ()),
-        None => ("Dusk FM".to_owned(), ()),
+        None => ("Dawn FM".to_owned(), ()),
     };
     let fade = 1.0 - 0.7 * focus;
     let afade = 1.0 - focus;
@@ -1158,19 +1158,19 @@ fn paint_mark(ui: &Ui, r: Rect) {
     mark(ui, r, Color32::from_white_alpha(170));
 }
 
-/// The Dusk FM mark (a setting sun), fitted inside `r`, tinted `tint`.
+/// The Dawn FM mark (a rising sun), fitted inside `r`, tinted `tint`.
 fn mark(ui: &Ui, r: Rect, tint: Color32) {
     const MARK: &[u8] = include_bytes!("../../assets/icon/mark.png");
     const W: f32 = 256.0;
     const H: f32 = 171.0;
-    let key = egui::Id::unique("duskfm-mark");
+    let key = egui::Id::unique("dawnfm-mark");
     let tex = match ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(key)) {
         Some(t) => t,
         None => {
             let Ok(img) = image::load_from_memory(MARK) else { return };
             let img = img.into_rgba8();
             let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
-            let t = ui.ctx().load_texture("duskfm-mark", color, egui::TextureOptions::LINEAR);
+            let t = ui.ctx().load_texture("dawnfm-mark", color, egui::TextureOptions::LINEAR);
             ui.ctx().data_mut(|d| d.insert_temp(key, t.clone()));
             t
         }

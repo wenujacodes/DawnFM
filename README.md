@@ -1,25 +1,25 @@
 <div align="center">
-  <img src="assets/icon/icon.png" width="128" alt="Dusk FM icon">
-  <h1>Dusk FM</h1>
+  <img src="assets/icon/icon.png" width="128" alt="Dawn FM icon">
+  <h1>Dawn FM</h1>
   <p><strong>A fast, native YouTube Music app for macOS - built in Rust.</strong></p>
   <p>Built with egui and rodio. No Electron, no embedded browser player, and light on memory while playing.</p>
 
   <p>
-    <a href="https://github.com/wenujacodes/DuskFM/releases/latest"><img src="https://img.shields.io/github/v/release/wenujacodes/DuskFM?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
-    <a href="https://github.com/wenujacodes/DuskFM/releases"><img src="https://img.shields.io/github/downloads/wenujacodes/DuskFM/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
+    <a href="https://github.com/wenujacodes/DawnFM/releases/latest"><img src="https://img.shields.io/github/v/release/wenujacodes/DawnFM?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
+    <a href="https://github.com/wenujacodes/DawnFM/releases"><img src="https://img.shields.io/github/downloads/wenujacodes/DawnFM/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
     <img src="https://img.shields.io/badge/platform-macOS-333?style=flat-square&labelColor=0d1117" alt="Platforms">
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/wenujacodes/DuskFM?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/wenujacodes/DawnFM?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
   </p>
 
   <p>
-    <a href="https://github.com/wenujacodes/DuskFM/releases/latest">Download</a> ·
+    <a href="https://github.com/wenujacodes/DawnFM/releases/latest">Download</a> ·
     <a href="#features">Features</a> ·
     <a href="#installation">Installation</a> ·
     <a href="#building-from-source">Build from source</a>
   </p>
 </div>
 
-> Dusk FM is an independent, unofficial client. It is not affiliated with, endorsed by, or connected to YouTube, Google, or Apple.
+> Dawn FM is an independent, unofficial client. It is not affiliated with, endorsed by, or connected to YouTube, Google, or Apple.
 
 ## Screenshots
 
@@ -33,7 +33,7 @@
     <td align="center"><b>Browse</b> - your music, shelves and navigation</td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/readme/screenshot-3.png" alt="Dusk FM interface and playback" width="100%"></td>
+    <td colspan="2"><img src="docs/readme/screenshot-3.png" alt="Dawn FM interface and playback" width="100%"></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><b>Desktop experience</b> - native UI, fast playback, and quality controls</td>
@@ -64,28 +64,28 @@
 
 ## Installation
 
-Download the latest build from [Releases](https://github.com/wenujacodes/DuskFM/releases/latest) when available, or build it yourself (below).
+Download the latest build from [Releases](https://github.com/wenujacodes/DawnFM/releases/latest) when available, or build it yourself (below).
 
-The app is signed ad hoc (there's no Developer ID), so macOS asks before its first launch: right-click **Dusk FM** and choose **Open**, or run `xattr -dr com.apple.quarantine "/Applications/Dusk FM.app"`.
+The app is signed ad hoc (there's no Developer ID), so macOS asks before its first launch: right-click **Dawn FM** and choose **Open**, or run `xattr -dr com.apple.quarantine "/Applications/Dawn FM.app"`.
 
 ## Building from source
 
 You need the [Rust toolchain](https://rustup.rs/).
 
 ```sh
-git clone https://github.com/wenujacodes/DuskFM.git
-cd DuskFM
+git clone https://github.com/wenujacodes/DawnFM.git
+cd DawnFM
 cargo build --release
-macos/bundle.sh target/release/duskfm 2.1.0 out
+macos/bundle.sh target/release/dawnfm 2.1.0 out
 ```
 
-This makes `out/Dusk FM.app` for your Mac's architecture (Apple Silicon or Intel).
+This makes `out/Dawn FM.app` for your Mac's architecture (Apple Silicon or Intel).
 
 ## Notes
 
 - Audio and the main interface are native (Rust + egui + rodio). Sign-in and some web flows may open a system webview window.
 - Hi-res/Lossless/Atmos playback depends on configured addon sources and whether a matching, playable copy exists for the selected track.
-- Dusk FM does not bypass subscriptions, DRM, or regional restrictions. Availability depends on the services and sources you use.
+- Dawn FM does not bypass subscriptions, DRM, or regional restrictions. Availability depends on the services and sources you use.
 - Third-party services (YouTube Music, lyrics providers, Discord, Last.fm, Spotify, addon sources) can change behavior over time.
 
 ## Contributing
@@ -94,13 +94,13 @@ Bug reports and pull requests are welcome. Please open an issue with clear repro
 
 ## License
 
-Dusk FM is licensed under [GPL-3.0](LICENSE).
+Dawn FM is licensed under [GPL-3.0](LICENSE).
 
 ## Credits
 
 BitChord was created by **[jackychan4891](https://github.com/jackychan4891)**, and this project is based on their work in [BitChord-PC-Continued](https://github.com/jackychan4891/BitChord-PC-Continued). Thanks to them and to all contributors of the original project.
 
-Dusk FM is distributed under the same GPL-3.0 license, as the license requires. The original copyright notices are kept.
+Dawn FM is distributed under the same GPL-3.0 license, as the license requires. The original copyright notices are kept.
 
 ## Acknowledgements
 

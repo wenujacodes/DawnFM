@@ -1664,7 +1664,7 @@ fn settings_connections(app: &mut App, ui: &mut Ui) {
         let busy = app.lastfm_busy.load(Ordering::Relaxed);
         let desc = match &app.lastfm_user {
             Some(name) => format!("Scrobbling what you play to {name}'s profile."),
-            None if busy => "Allow Dusk FM on the Last.fm page that opened in your browser.".to_owned(),
+            None if busy => "Allow Dawn FM on the Last.fm page that opened in your browser.".to_owned(),
             None => "Scrobble what you play to your Last.fm profile.".to_owned(),
         };
         let (mut connect, mut disconnect) = (false, false);
@@ -1734,7 +1734,7 @@ fn network(app: &mut App, ui: &mut Ui) {
     use crate::proxy::{self, Setting};
     let same = |a: &Setting, b: &Setting| std::mem::discriminant(a) == std::mem::discriminant(b);
     let mut pick = None;
-    setting_row(ui, "Proxy", Some("Send everything Dusk FM fetches through a proxy: songs, lyrics, sign-in and Listen together."), |ui| {
+    setting_row(ui, "Proxy", Some("Send everything Dawn FM fetches through a proxy: songs, lyrics, sign-in and Listen together."), |ui| {
         let btn = dropdown_button(ui, app.proxy_mode.label(), 220.0, "Proxy");
         egui::Popup::menu(&btn).show(|ui| {
             ui.set_width(220.0);
@@ -1766,7 +1766,7 @@ fn network(app: &mut App, ui: &mut Ui) {
             divider(ui);
             let desc = match proxy::system() {
                 Some(p) => format!("Using {}.", proxy::redact(&p)),
-                None => "Dusk FM uses the HTTPS_PROXY or HTTP_PROXY environment variable when one is set, and otherwise connects directly.".to_owned(),
+                None => "Dawn FM uses the HTTPS_PROXY or HTTP_PROXY environment variable when one is set, and otherwise connects directly.".to_owned(),
             };
             setting_row(ui, "System proxy", Some(&desc), |_| {});
         }

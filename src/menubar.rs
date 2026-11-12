@@ -1,4 +1,4 @@
-//! The macOS menu bar: Dusk FM, Controls, View, Window and Help, laid out the way
+//! The macOS menu bar: Dawn FM, Controls, View, Window and Help, laid out the way
 //! Mac apps (Music among them) lay them out. Clicks are queued here and the UI is
 //! woken to handle them, as with the tray and the Dock menu.
 
@@ -26,7 +26,7 @@ pub enum Cmd {
 
 static PENDING: Mutex<Vec<Cmd>> = Mutex::new(Vec::new());
 
-const REPO: &str = "https://github.com/wenujacodes/DuskFM";
+const REPO: &str = "https://github.com/wenujacodes/DawnFM";
 
 /// Menu ids, and what each does.
 const ITEMS: &[(&str, Cmd)] = &[
@@ -59,7 +59,7 @@ pub fn install(wake: impl Fn() + Send + Sync + Clone + 'static) {
     let cmd = Modifiers::META;
     let version = env!("CARGO_PKG_VERSION");
     let about = AboutMetadata {
-        name: Some("Dusk FM".into()),
+        name: Some("Dawn FM".into()),
         version: Some(version.into()),
         short_version: Some(version.into()),
         copyright: Some("GPL-3.0 · Based on BitChord by jackychan4891".into()),
@@ -67,7 +67,7 @@ pub fn install(wake: impl Fn() + Send + Sync + Clone + 'static) {
     };
     let sep = PredefinedMenuItem::separator;
 
-    let app = Submenu::new("Dusk FM", true);
+    let app = Submenu::new("Dawn FM", true);
     let controls = Submenu::new("Controls", true);
     let view = Submenu::new("View", true);
     let window = Submenu::new("Window", true);
@@ -75,18 +75,18 @@ pub fn install(wake: impl Fn() + Send + Sync + Clone + 'static) {
 
     let built = (|| -> tray_icon::menu::Result<Menu> {
         app.append_items(&[
-            &PredefinedMenuItem::about(Some("About Dusk FM"), Some(about)),
+            &PredefinedMenuItem::about(Some("About Dawn FM"), Some(about)),
             &sep(),
             &item("mb-settings", "Settings…", cmd, Some(Code::Comma)),
             &sep(),
             &PredefinedMenuItem::services(None),
             &sep(),
-            &PredefinedMenuItem::hide(Some("Hide Dusk FM")),
+            &PredefinedMenuItem::hide(Some("Hide Dawn FM")),
             &PredefinedMenuItem::hide_others(None),
             &PredefinedMenuItem::show_all(None),
             &sep(),
             // Ours, not AppKit's terminate: the app saves its state on the way out.
-            &item("mb-quit", "Quit Dusk FM", cmd, Some(Code::KeyQ)),
+            &item("mb-quit", "Quit Dawn FM", cmd, Some(Code::KeyQ)),
         ])?;
         // Space stays the app's own key: as a menu shortcut it would swallow spaces
         // typed into the search box.
@@ -113,7 +113,7 @@ pub fn install(wake: impl Fn() + Send + Sync + Clone + 'static) {
             &PredefinedMenuItem::bring_all_to_front(None),
         ])?;
         help.append_items(&[
-            &MenuItem::with_id("mb-site", "Dusk FM on GitHub", true, None),
+            &MenuItem::with_id("mb-site", "Dawn FM on GitHub", true, None),
             &MenuItem::with_id("mb-issue", "Report a Problem…", true, None),
         ])?;
         Menu::with_items(&[&app, &controls, &view, &window, &help])

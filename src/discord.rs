@@ -16,7 +16,7 @@ use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 const CLIENT_ID: &str = "1521756469433991299";
 
 /// The name the profile card shows, in place of the Discord app's registered name.
-const APP_NAME: &str = "Dusk FM";
+const APP_NAME: &str = "Dawn FM";
 
 const RETRY: Duration = Duration::from_secs(15);
 /// The longest wait between failed connects to a socket that exists.

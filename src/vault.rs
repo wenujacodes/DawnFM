@@ -6,9 +6,9 @@
 
 use std::path::Path;
 
-const SERVICE: &str = "DuskFM";
-/// The Keychain service the sign-ins were saved under before the rename.
-const OLD_SERVICE: &str = "ytm-rs";
+const SERVICE: &str = "DawnFM";
+/// The Keychain names the sign-ins were saved under before, newest first.
+const OLD_SERVICES: [&str; 2] = ["DuskFM", "ytm-rs"];
 
 /// The credential names for `name`, scoped to the data folder when it isn't the
 /// default one (`YTM_DATA_DIR` dev profiles, tests), so those never share or touch
@@ -49,7 +49,7 @@ mod store {
         // Saved before the rename: copy it to the new name (the old entry stays).
         let old = {
             let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            get_in(super::OLD_SERVICE, key).ok().flatten()
+            super::OLD_SERVICES.iter().find_map(|old| get_in(old, key).ok().flatten())
         };
         if let Some(secret) = &old {
             match set(key, secret) {
@@ -96,10 +96,12 @@ mod store {
     pub fn delete(key: &str) -> anyhow::Result<()> {
         let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // The pre-rename copy goes too, or the next read would bring the sign-in back.
-        for part in 0.. {
-            match entry_in(super::OLD_SERVICE, key, part).and_then(|e| e.delete_credential()) {
-                Ok(()) => {}
-                _ => break,
+        for old in super::OLD_SERVICES {
+            for part in 0.. {
+                match entry_in(old, key, part).and_then(|e| e.delete_credential()) {
+                    Ok(()) => {}
+                    _ => break,
+                }
             }
         }
         delete_from(key, 0)

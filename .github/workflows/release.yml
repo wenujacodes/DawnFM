@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v2.1.0 to build Dusk FM for Apple Silicon and Intel and publish a
+# Push a tag like v2.1.0 to build Dawn FM for Apple Silicon and Intel and publish a
 # GitHub Release with a .dmg and zips for each.
 on:
   push:
@@ -41,20 +41,30 @@ jobs:
 
       - name: Make the app bundles
         run: |
-          sh macos/bundle.sh target/release/duskfm "${{ steps.version.outputs.value }}" out
-          sh macos/bundle.sh target/release/duskfm "${{ steps.version.outputs.value }}" out-portable portable
+          sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out
+          sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out-portable portable
+          # For Dusk FM 2.1.0's updater, which looks for "Dusk FM.app" running "duskfm".
+          APP_NAME="Dusk FM" EXEC=duskfm sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out-legacy
+          APP_NAME="Dusk FM" EXEC=duskfm sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out-legacy-portable portable
 
       # The app's updater looks for these exact names (asset_name in src/update.rs).
       - name: Package .dmg and .zip
         run: |
           v="${{ steps.version.outputs.value }}"
-          name="DuskFM-$v-macos-${{ matrix.arch }}"
+          name="DawnFM-$v-macos-${{ matrix.arch }}"
           mkdir -p dist dmg
-          ditto -c -k --keepParent "out/Dusk FM.app" "dist/$name.zip"
-          ditto -c -k --keepParent "out-portable/Dusk FM.app" "dist/$name-portable.zip"
-          cp -R "out/Dusk FM.app" dmg/
+          ditto -c -k --keepParent "out/Dawn FM.app" "dist/$name.zip"
+          ditto -c -k --keepParent "out-portable/Dawn FM.app" "dist/$name-portable.zip"
+          cp -R "out/Dawn FM.app" dmg/
           ln -s /Applications dmg/Applications
-          hdiutil create -volname "Dusk FM" -srcfolder dmg -ov -format UDZO "dist/$name.dmg"
+          hdiutil create -volname "Dawn FM" -srcfolder dmg -ov -format UDZO "dist/$name.dmg"
+          # The same app, packed the way Dusk FM 2.1.0's updater expects (its file names and
+          # bundle name); it installs Dawn FM, which renames itself on its next update.
+          old="DuskFM-$v-macos-${{ matrix.arch }}"
+          mkdir -p dmg-legacy
+          cp -R "out-legacy/Dusk FM.app" dmg-legacy/
+          hdiutil create -volname "Dusk FM" -srcfolder dmg-legacy -ov -format UDZO "dist/$old.dmg"
+          ditto -c -k --keepParent "out-legacy-portable/Dusk FM.app" "dist/$old-portable.zip"
           ls -lh dist
 
       - uses: actions/upload-artifact@v7
@@ -81,10 +91,11 @@ jobs:
         run: |
           prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
           {
-            echo "The app is signed ad hoc, so macOS asks before the first launch: right-click Dusk FM and choose Open."
+            echo "The app is signed ad hoc, so macOS asks before the first launch: right-click Dawn FM and choose Open."
             echo
             echo "- **Apple Silicon** (M1 and newer): \`arm64\` · **Intel**: \`x64\`"
-            echo "- \`.dmg\`: drag Dusk FM to Applications. \`-portable.zip\`: keeps its settings in a folder beside the app."
+            echo "- \`.dmg\`: drag Dawn FM to Applications. \`-portable.zip\`: keeps its settings in a folder beside the app."
+            echo "- \`DuskFM-…\` files: only for updating from Dusk FM; download the \`DawnFM-…\` ones."
             echo
             echo "## Changes"
             if [ -n "$prev" ]; then git log --no-merges --pretty='- %s' "$prev..$GITHUB_REF_NAME"; else echo "- First release"; fi
@@ -97,5 +108,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "Dusk FM ${GITHUB_REF_NAME#v}" \
+            --title "Dawn FM ${GITHUB_REF_NAME#v}" \
             --notes-file notes.md
