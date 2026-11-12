@@ -750,7 +750,7 @@ pub fn search_results(app: &mut App, ctx: &egui::Context) {
                         }
                         heading(ui, label);
                         for (i, c) in cards.iter().take(3).enumerate() {
-                            if row(ui, (label, i), &c.title, &c.subtitle, &c.thumbs, c.round) {
+                            if row(ui, (label, i), &c.title, &super::widgets::card_subtitle(&c.subtitle), &c.thumbs, c.round) {
                                 act = Some(Action::Open(c.target.clone()));
                             }
                         }

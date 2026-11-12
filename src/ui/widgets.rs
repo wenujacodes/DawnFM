@@ -517,7 +517,7 @@ pub fn card(ui: &mut Ui, c: &Card, width: f32, liked: bool, acts: &mut Vec<Actio
     let title_h = title.size().y;
     ui.painter().galley(pos2(rect.left(), img.bottom() + 10.0), title, tcolor);
     let sub_y = img.bottom() + 14.0 + title_h;
-    linked_text(ui, pos2(rect.left(), sub_y), &c.subtitle, &c.links, theme::regular(13.0), theme::text_dim(), width, acts);
+    linked_text(ui, pos2(rect.left(), sub_y), &card_subtitle(&c.subtitle), &c.links, theme::regular(13.0), theme::text_dim(), width, acts);
     // Right-click anywhere on the tile opens its menu.
     egui::Popup::context_menu(&resp).show(|ui| card_menu_contents(ui, c, liked, acts));
 
@@ -530,6 +530,18 @@ pub fn card(ui: &mut Ui, c: &Card, width: f32, liked: bool, acts: &mut Vec<Actio
     } else if resp.clicked() {
         acts.push(Action::Open(c.target.clone()));
     }
+}
+
+/// A card's subtitle as shown: without the leading "Song", "Album", "Single" or "EP",
+/// and without an artist's subscriber count.
+pub fn card_subtitle(s: &str) -> String {
+    const KINDS: [&str; 6] = ["Song", "Album", "Single", "EP", "Video", "Episode"];
+    let mut parts: Vec<&str> = s.split(" • ").collect();
+    if parts.len() > 1 && KINDS.contains(&parts[0].trim()) {
+        parts.remove(0);
+    }
+    parts.retain(|p| !(p.trim_end().ends_with(" subscribers") || p.trim_end().ends_with(" subscriber")));
+    parts.join(" • ")
 }
 
 fn card_menu_contents(ui: &mut Ui, c: &Card, liked: bool, acts: &mut Vec<Action>) {
@@ -858,13 +870,12 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
         return resp;
     }
     // Other rows: title + artists, then album, then plays when there's room.
-    let (title_w, plays_x, album_x) = match (wide, o.show_album, t.plays) {
-        (true, true, Some(_)) => (avail * 0.45, Some(x + avail * 0.82), Some(x + avail * 0.5)),
-        (true, true, None) => (avail * 0.55, None, Some(x + avail * 0.6)),
-        (true, false, Some(_)) => (avail * 0.78, Some(x + avail * 0.82), None),
+    // Play counts aren't shown.
+    let (title_w, plays_x, album_x): (f32, Option<f32>, Option<f32>) = match (wide, o.show_album) {
+        (true, true) => (avail * 0.55, None, Some(x + avail * 0.6)),
         _ => (avail, None, None),
     };
-    let plays = t.plays.map(|n| format!("{} plays", crate::backend::compact(n)));
+    let plays: Option<String> = None;
     let title_col = if o.current { o.accent } else { theme::text() };
     let sub = match (album_row, &plays, plays_x) {
         (true, Some(p), None) => Some(p.clone()),
@@ -1015,6 +1026,22 @@ pub fn h_scroll<R>(ui: &mut Ui, id: &str, nudge: i32, count: usize, item_width: 
         add(ui)
     }).inner);
     ui.ctx().data_mut(|d| d.insert_temp(viewport_id, out.inner_rect.width()));
+    // Cards cut off at an edge fade into the page: the right while there's more to
+    // see, the left once scrolled.
+    let (r, off) = (out.inner_rect, out.state.clamped_offset().x);
+    let left_over = out.content_size.x - r.width() - off;
+    let base = if theme::light() { theme::bg() } else { crate::preset::active().solid() };
+    const FADE: f32 = 110.0;
+    if off > 0.5 {
+        let k = (off / FADE).min(1.0) * 0.85;
+        let band = Rect::from_min_max(r.left_top(), pos2(r.left() + FADE, r.bottom()));
+        ui.painter().add(egui::Shape::gradient_rect(band, egui::Direction::LeftToRight, [base.gamma_multiply(k), Color32::TRANSPARENT]));
+    }
+    if left_over > 0.5 {
+        let k = (left_over / FADE).min(1.0) * 0.85;
+        let band = Rect::from_min_max(pos2(r.right() - FADE, r.top()), r.right_bottom());
+        ui.painter().add(egui::Shape::gradient_rect(band, egui::Direction::RightToLeft, [base.gamma_multiply(k), Color32::TRANSPARENT]));
+    }
     (out.inner, reached_end)
 }
 
@@ -1148,6 +1175,15 @@ pub fn skeleton(ui: &mut Ui, time: f64, rows: usize, card: f32) {
 #[cfg(test)]
 mod shelf_scroll_tests {
     use super::{shelf_page_starts, shelf_page_target};
+
+    #[test]
+    fn card_subtitles_lose_kind_and_subscribers() {
+        assert_eq!(super::card_subtitle("Song • Justin Bieber"), "Justin Bieber");
+        assert_eq!(super::card_subtitle("Album • Justin Bieber • 2021"), "Justin Bieber • 2021");
+        assert_eq!(super::card_subtitle("Single • Nisula & Cozzy"), "Nisula & Cozzy");
+        assert_eq!(super::card_subtitle("342K subscribers"), "");
+        assert_eq!(super::card_subtitle("Sam Ritchie"), "Sam Ritchie");
+    }
 
     #[test]
     fn arrows_visit_aligned_pages_in_both_directions() {
