@@ -1012,9 +1012,23 @@ pub fn shimmer_band(ui: &Ui, r: Rect, radius: f32, time: f64) {
 
 /// Paint a remote image into `rect`: the skeleton's shimmer while it downloads (not
 /// egui's spinner), then a quick fade-in. One already loaded just shows.
+/// Dusk FM's own Liked Music cover, in place of YouTube Music's stock one.
+const LIKED_ART: &str = "bytes://duskfm/liked.png";
+
+/// The image to load for `url`: the app's Liked Music cover for YouTube's, else `url`.
+fn own_art<'a>(ctx: &egui::Context, url: &'a str) -> &'a str {
+    if !url.contains("/images/pbg/liked-songs") {
+        return url;
+    }
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| ctx.include_bytes(LIKED_ART, include_bytes!("../../assets/icon/liked.png").as_slice()));
+    LIKED_ART
+}
+
 pub fn paint_remote(ui: &Ui, url: &str, rect: Rect, radius: f32, uv: Rect, tint: Color32) {
     const FADE: f64 = 0.22;
     let ctx = ui.ctx();
+    let url = own_art(ctx, url);
     let now = ctx.input(|i| i.time);
     let id = egui::Id::unique(("img-fade", url));
     match egui::Image::new(url).load_for_size(ctx, rect.size()) {
