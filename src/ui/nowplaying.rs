@@ -538,8 +538,38 @@ pub(super) fn lyrics_drawer(app: &mut App, ui: &mut Ui, now: f64) {
     }
     let pages = theme::set_mode(ui.ctx(), false);
     ui.set_clip_rect(rect);
-    lyrics_panel(app, ui, rect, now, false);
+    if !lyrics_wait(app, ui, rect, now) {
+        lyrics_panel(app, ui, rect, now, false);
+    }
     theme::set_mode(ui.ctx(), pages);
+}
+
+/// A song whose lyrics nobody asked for (restored, or picked up from another device)
+/// or whose answer never came: ask once after a few seconds, then stop spinning.
+/// False when there are lyrics for the song to draw.
+fn lyrics_wait(app: &mut App, ui: &mut Ui, rect: Rect, now: f64) -> bool {
+    let Some(shown) = app.shown().cloned() else { return false };
+    if app.lyrics.as_ref().is_some_and(|(id, _)| *id == shown.id) {
+        return false;
+    }
+    let key = egui::Id::unique("lyrics-drawer-wait");
+    let (since, mut asked) = ui.ctx().data(|d| d.get_temp::<(String, f64, bool)>(key)).filter(|(id, ..)| *id == shown.id).map_or((now, false), |(_, t, a)| (t, a));
+    if !asked && now - since > 3.0 {
+        app.backend.request(crate::backend::Req::Lyrics(shown.clone()));
+        asked = true;
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(key, (shown.id.clone(), since, asked)));
+    ui.add_space(rect.height() * 0.35);
+    ui.vertical_centered(|ui| {
+        if now - since < 20.0 {
+            ui.spinner();
+            ui.label(egui::RichText::new("Loading lyrics…").color(theme::text_dim()));
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+        } else {
+            ui.label(egui::RichText::new("No lyrics yet").font(theme::semibold(16.0)).color(theme::text_dim()));
+        }
+    });
+    true
 }
 
 fn lyrics_panel(app: &mut App, ui: &mut Ui, rect: Rect, now: f64, centered: bool) {
