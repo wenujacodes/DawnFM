@@ -809,9 +809,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         // over the top part, so rows scrolling under the controls don't show through.
         let cap = Rect::from_min_max(pos2(full.left(), full.bottom() - DOCKED_H), full.max);
         let base = if theme::light() { theme::bg() } else { app.look().solid() };
-        let fade_to = cap.top() + DOCKED_H * 0.35;
-        vgradient(ui.painter(), Rect::from_min_max(cap.min, pos2(cap.right(), fade_to)), Color32::TRANSPARENT, base.gamma_multiply(0.94));
-        ui.painter().rect_filled(Rect::from_min_max(pos2(cap.left(), fade_to), cap.max), 0.0, base.gamma_multiply(0.94));
+        ui.painter().rect_filled(cap, 0.0, base.gamma_multiply(0.94));
         cap.shrink2(vec2(12.0, 0.0))
     } else {
         if frosted {
