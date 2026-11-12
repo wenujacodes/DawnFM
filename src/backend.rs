@@ -1141,12 +1141,17 @@ impl Backend {
                 if let Some((this, id)) = report.filter(|_| audio.status.wanted_gen.load(Ordering::Relaxed) == generation) {
                     let rt = this.rt.clone();
                     rt.spawn(async move {
-                        match ytm::report_play(&this.api, &id).await {
+                        // The web player's request needs it (see `Solver::sts`).
+                        let sts = this.jsc.sts(&this.http()).await;
+                        match ytm::report_play(&this.api, &id, sts.as_ref().ok().copied()).await {
                             Ok(w) => {
                                 log::debug!("reported play of {id}");
                                 this.report_watchtime(&id, generation, w).await;
                             }
-                            Err(e) => log::warn!("couldn't report play of {id}: {e:#}"),
+                            Err(e) => match sts {
+                                Err(s) => log::warn!("couldn't report play of {id}: {:#}", e.context(format!("no signature timestamp: {s:#}"))),
+                                Ok(_) => log::warn!("couldn't report play of {id}: {e:#}"),
+                            },
                         }
                     });
                 }

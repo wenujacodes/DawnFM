@@ -43,11 +43,68 @@ pub struct Solver {
     /// When preparing a player last failed: each song would otherwise download
     /// base.js (~2.5 MB) and preprocess it again.
     failed: Mutex<Option<Instant>>,
+    /// The current player's version and signature timestamp, read without preparing it
+    /// (see [`Solver::sts`]), and when; or when reading them last failed.
+    sts: tokio::sync::Mutex<Option<(Result<(String, u32), ()>, Instant)>>,
 }
 
 impl Solver {
     pub fn new(data_dir: &Path) -> Self {
-        Self { dir: data_dir.join("ejs"), worker: Mutex::new(None), player: tokio::sync::Mutex::new(None), failed: Mutex::new(None) }
+        Self {
+            dir: data_dir.join("ejs"),
+            worker: Mutex::new(None),
+            player: tokio::sync::Mutex::new(None),
+            failed: Mutex::new(None),
+            sts: tokio::sync::Mutex::new(None),
+        }
+    }
+
+    /// The current player's `signatureTimestamp`, which a web client's `/player` request
+    /// has to carry: without it (or with one a few versions old) YouTube answers
+    /// UNPLAYABLE, "The page needs to be reloaded", and leaves out the playback tracking
+    /// URLs that put a play in the account's history. Without Premium the player is
+    /// never prepared for solving, so this reads only the version and the timestamp
+    /// (base.js once per version, kept on disk), not the preprocessing that needs.
+    pub async fn sts(&self, http: &reqwest::Client) -> anyhow::Result<u32> {
+        if let Ok(p) = self.player.try_lock()
+            && let Some((p, _)) = p.as_ref().filter(|(_, at)| at.elapsed() < PLAYER_TTL)
+        {
+            return Ok(p.sts);
+        }
+        let mut cached = self.sts.lock().await;
+        let known = match cached.as_ref() {
+            Some((Ok((_, sts)), at)) if at.elapsed() < PLAYER_TTL => return Ok(*sts),
+            Some((Err(()), at)) if at.elapsed() < Duration::from_secs(600) => anyhow::bail!("the player version couldn't be read a moment ago"),
+            Some((Ok(known), _)) => Some(known.clone()),
+            _ => None,
+        };
+        let res = self.read_sts(http, known).await;
+        *cached = Some((res.as_ref().map(Clone::clone).map_err(|_| ()), Instant::now()));
+        res.map(|(_, sts)| sts)
+    }
+
+    async fn read_sts(&self, http: &reqwest::Client, known: Option<(String, u32)>) -> anyhow::Result<(String, u32)> {
+        let id = self.player_id(http).await?;
+        if let Some(known) = known.filter(|(k, _)| *k == id) {
+            return Ok(known);
+        }
+        let file = self.dir.join(format!("{id}.sts"));
+        if let Some(sts) = std::fs::read_to_string(&file).ok().and_then(|s| s.trim().parse().ok()) {
+            return Ok((id, sts));
+        }
+        let base = http.get(base_js(&id)).send().await?.error_for_status()?.text().await?;
+        let sts = signature_timestamp(&base).ok_or_else(|| anyhow::anyhow!("no signatureTimestamp in player {id}"))?;
+        // Kept for the next run; preparing this player later still downloads it again.
+        if std::fs::create_dir_all(&self.dir).is_ok() {
+            let _ = std::fs::write(&file, sts.to_string());
+        }
+        log::debug!("player {id}: signatureTimestamp {sts}");
+        Ok((id, sts))
+    }
+
+    async fn player_id(&self, http: &reqwest::Client) -> anyhow::Result<String> {
+        let iframe = http.get("https://www.youtube.com/iframe_api").send().await?.error_for_status()?.text().await?;
+        player_id(&iframe).ok_or_else(|| anyhow::anyhow!("no player version in iframe_api"))
     }
 
     /// The current player version, preprocessed and ready to solve with.
@@ -68,15 +125,13 @@ impl Solver {
     }
 
     async fn prepare(&self, http: &reqwest::Client) -> anyhow::Result<Player> {
-        let iframe = http.get("https://www.youtube.com/iframe_api").send().await?.error_for_status()?.text().await?;
-        let id = player_id(&iframe).ok_or_else(|| anyhow::anyhow!("no player version in iframe_api"))?;
+        let id = self.player_id(http).await?;
         let script = self.dir.join(format!("{id}.js"));
         let sts = match std::fs::read_to_string(self.dir.join(format!("{id}.sts"))).ok().and_then(|s| s.trim().parse().ok()) {
             Some(sts) if script.exists() => sts,
             _ => {
                 let t = Instant::now();
-                let url = format!("https://www.youtube.com/s/player/{id}/player_ias.vflset/en_US/base.js");
-                let base = http.get(url).send().await?.error_for_status()?.text().await?;
+                let base = http.get(base_js(&id)).send().await?.error_for_status()?.text().await?;
                 let sts = signature_timestamp(&base).ok_or_else(|| anyhow::anyhow!("no signatureTimestamp in player {id}"))?;
                 let (reply, rx) = oneshot::channel();
                 self.send(Job::Preprocess { base, reply })?;
@@ -262,6 +317,10 @@ fn solve(ctx: &Context, n: Option<String>, sig: Option<String>) -> anyhow::Resul
         };
         Ok((run("n", n)?, run("sig", sig)?))
     })
+}
+
+fn base_js(id: &str) -> String {
+    format!("https://www.youtube.com/s/player/{id}/player_ias.vflset/en_US/base.js")
 }
 
 /// `player\/5203c085\/` in iframe_api's script.

@@ -992,12 +992,16 @@ pub async fn dislike(api: &Api, video_id: &str) -> anyhow::Result<()> {
 /// playback starts. Streams come from other clients, so this asks for the player
 /// response only to get that URL. What it returns then reports how much of the song
 /// was heard ([`report_watchtime`]), as the web player does while it plays.
-pub async fn report_play(api: &Api, video_id: &str) -> anyhow::Result<Watchtime> {
-    let player = api.call_signed_in("player", json!({"videoId": video_id, "contentCheckOk": true, "racyCheckOk": true})).await?;
+/// `sts`: the current player's signature timestamp ([`crate::jsc::Solver::sts`]); without
+/// it YouTube answers UNPLAYABLE ("The page needs to be reloaded") with no stats URLs.
+pub async fn report_play(api: &Api, video_id: &str, sts: Option<u32>) -> anyhow::Result<Watchtime> {
+    let player = api.call_signed_in("player", player_request(video_id, sts)).await?;
     let tracking = &player["playbackTracking"];
-    let url = tracking["videostatsPlaybackUrl"]["baseUrl"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("no playback tracking URL ({})", player["playabilityStatus"]["status"].as_str().unwrap_or("?")))?;
+    let url = tracking["videostatsPlaybackUrl"]["baseUrl"].as_str().ok_or_else(|| {
+        let status = &player["playabilityStatus"];
+        let reason = status["reason"].as_str().map(|r| format!(": {r}")).unwrap_or_default();
+        anyhow::anyhow!("no playback tracking URL ({}{reason})", status["status"].as_str().unwrap_or("?"))
+    })?;
     let cpn = cpn();
     api.get_signed_in(url, &[("ver", "2"), ("c", "WEB_REMIX"), ("cpn", &cpn)]).await?;
     Ok(Watchtime {
@@ -1006,6 +1010,15 @@ pub async fn report_play(api: &Api, video_id: &str) -> anyhow::Result<Watchtime>
         flush_at: arr(&tracking["videostatsScheduledFlushWalltimeSeconds"]).iter().filter_map(Value::as_u64).collect(),
         flush_every: tracking["videostatsDefaultFlushIntervalSeconds"].as_u64().filter(|&s| s > 0).unwrap_or(40),
     })
+}
+
+/// The web player's `/player` request body, as music.youtube.com sends it.
+fn player_request(video_id: &str, sts: Option<u32>) -> Value {
+    let mut body = json!({"videoId": video_id, "contentCheckOk": true, "racyCheckOk": true});
+    if let Some(sts) = sts {
+        body["playbackContext"] = json!({"contentPlaybackContext": {"html5Preference": "HTML5_PREF_WANTS", "signatureTimestamp": sts}});
+    }
+    body
 }
 
 /// One play's listening-time reports: where they go and when the web player sends them.
@@ -1797,6 +1810,33 @@ mod tests {
         assert!(!same_title("Levitating (Remix)", "Levitating"));
         assert!(!same_title("Mitwa", "Tere Mere Honthon Pe - Mitwa"));
         assert!(!same_title("", ""));
+    }
+
+    #[test]
+    fn player_request_carries_the_signature_timestamp() {
+        let body = player_request("a4O-abCXsfA", Some(20760));
+        assert_eq!(body["playbackContext"]["contentPlaybackContext"]["signatureTimestamp"], 20760);
+        assert_eq!(body["videoId"], "a4O-abCXsfA");
+        assert!(player_request("a4O-abCXsfA", None).get("playbackContext").is_none());
+    }
+
+    /// The web player's `/player` answer has the playback tracking URLs that put a play in
+    /// history only with the current player's signature timestamp (anonymous here; the
+    /// signed-in request is the same but for the cookies). Run alone:
+    /// `cargo test -- --ignored ytm::tests::playback_tracking_live --exact --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn playback_tracking_live() {
+        let dir = std::env::temp_dir().join("ytm-rs-playback-tracking-test");
+        let api = crate::ytmapi::Api::new(&dir);
+        let sts = crate::jsc::Solver::new(&dir).sts(&crate::proxy::http()).await.unwrap();
+        let has_url = |v: &Value| v["playbackTracking"]["videostatsPlaybackUrl"]["baseUrl"].is_string();
+        let without = api.call("player", player_request("a4O-abCXsfA", None), false).await.unwrap();
+        println!("without sts: {}", without["playabilityStatus"]);
+        let with = api.call("player", player_request("a4O-abCXsfA", Some(sts)), false).await.unwrap();
+        println!("with sts {sts}: {}", with["playabilityStatus"]["status"]);
+        assert!(has_url(&with), "{}", with["playabilityStatus"]);
+        assert!(!has_url(&without));
     }
 
     /// Asks the Android VR client for a real album (no sign-in). Run alone:
