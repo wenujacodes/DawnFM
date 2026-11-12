@@ -29,7 +29,6 @@ pub use titlebar::custom as custom_titlebar;
 mod transfer;
 mod widgets;
 
-use crate::sync::MutexExt;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -79,7 +78,6 @@ pub enum LibTab {
     Songs,
     Albums,
     History,
-    Uploads,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -335,9 +333,6 @@ pub struct App {
     /// When the library was last requested; the sidebar spinner gives up after a while.
     library_requested: std::time::Instant,
     history: Option<Vec<Track>>,
-    uploads: Option<Vec<Track>>,
-    /// Files chosen in the upload dialog, handed over from its thread.
-    picked_uploads: Arc<std::sync::Mutex<Option<Vec<std::path::PathBuf>>>>,
     liked: HashSet<String>,
     /// Songs whose unlike is queued and hasn't gone through yet.
     unliking: HashMap<String, Track>,
@@ -655,8 +650,6 @@ impl App {
             library: None,
             library_requested: std::time::Instant::now(),
             history: None,
-            uploads: None,
-            picked_uploads: Default::default(),
             liked: HashSet::new(),
             unliking: HashMap::new(),
             selection: Selection::default(),
@@ -812,7 +805,6 @@ impl App {
             Ok("home") => app.go(Page::Home),
             Ok("new") | Ok("explore") => app.go(Page::New),
             Ok("library") => app.go(Page::Library(LibTab::Playlists)),
-            Ok("uploads") => app.go(Page::Library(LibTab::Uploads)),
             Ok("liked") => app.go(Page::Library(LibTab::Songs)),
             Ok("history") => app.go(Page::Library(LibTab::History)),
             Ok("settings") => app.go(Page::Settings),
@@ -822,10 +814,6 @@ impl App {
             Ok(p) if p.starts_with("artist:") => app.go(Page::Artist(p[7..].to_owned())),
             Ok(p) if p.starts_with("playlist:") => app.go(Page::Playlist(p[9..].to_owned())),
             _ => {}
-        }
-        // YTM_UPLOAD=<file> uploads that file as if it had been picked.
-        if let Some(f) = std::env::var_os("YTM_UPLOAD") {
-            *app.picked_uploads.lock_unpoisoned() = Some(vec![f.into()]);
         }
         // Dev hook: YTM_PROXY_INPUT=<address> opens Settings › Network on Custom with it typed in.
         if let Some(v) = dev_var("YTM_PROXY_INPUT") {
@@ -959,7 +947,6 @@ impl App {
             }
             Page::Artist(id) => Some(Req::Artist(id.clone())),
             Page::Library(LibTab::History) if self.logged_in => Some(Req::History),
-            Page::Library(LibTab::Uploads) if self.logged_in => Some(Req::Uploads),
             Page::Library(LibTab::Songs) => {
                 if self.logged_in {
                     self.visit_list(LIKED_MUSIC, false);
@@ -976,7 +963,6 @@ impl App {
             Page::Album(id) | Page::Playlist(id) => self.opened(id).is_some(),
             Page::Artist(id) => self.artist.as_ref().is_some_and(|a| &a.id == id),
             Page::Library(LibTab::History) => self.history.is_some(),
-            Page::Library(LibTab::Uploads) => self.uploads.is_some(),
             Page::Library(LibTab::Songs) => self.opened(LIKED_MUSIC).is_some(),
             Page::Library(_) => self.library.is_some(),
             _ => false,
@@ -1154,12 +1140,6 @@ impl eframe::App for App {
             m.set_playing(playing);
         }
         self.request_lyric_extras();
-        // Upload: files from the picker, or dropped onto the window.
-        let mut files = self.picked_uploads.lock_unpoisoned().take().unwrap_or_default();
-        files.extend(ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_owned()).filter(|p| !p.as_os_str().is_empty()).collect::<Vec<_>>()));
-        if !files.is_empty() {
-            self.upload_files(files);
-        }
         transfer::poll(self, ctx, now);
         if crate::deeplink::take_show() {
             self.show_window(ctx);

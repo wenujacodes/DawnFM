@@ -1,6 +1,5 @@
-//! The Google and Spotify sign-in windows, and uploading songs to the account.
+//! The Google and Spotify sign-in windows.
 
-use crate::sync::MutexExt;
 use std::sync::atomic::Ordering;
 
 use crate::backend::Req;
@@ -8,34 +7,6 @@ use crate::backend::Req;
 use super::App;
 
 impl App {
-    /// Open the system file picker for songs to upload; it runs on its own thread.
-    pub(super) fn pick_uploads(&self, ctx: &egui::Context) {
-        let (slot, ctx) = (self.picked_uploads.clone(), ctx.clone());
-        std::thread::spawn(move || {
-            let files = rfd::FileDialog::new().set_title("Upload music").add_filter("Audio", UPLOAD_EXTS).pick_files();
-            if let Some(files) = files {
-                *slot.lock_unpoisoned() = Some(files);
-                ctx.request_repaint();
-            }
-        });
-    }
-
-    pub(super) fn upload_files(&mut self, files: Vec<std::path::PathBuf>) {
-        let (ok, skipped): (Vec<_>, Vec<_>) = files.into_iter().partition(|f| {
-            f.extension().and_then(|e| e.to_str()).is_some_and(|e| UPLOAD_EXTS.contains(&e.to_ascii_lowercase().as_str()))
-        });
-        if !self.logged_in {
-            self.toast("Sign in to upload music");
-        } else if ok.is_empty() {
-            if !skipped.is_empty() {
-                self.toast("YouTube Music only takes MP3, M4A, FLAC, OGG and WMA files");
-            }
-        } else {
-            self.toast(if ok.len() == 1 { "Uploading 1 song…".to_owned() } else { format!("Uploading {} songs…", ok.len()) });
-            self.backend.request(Req::Upload(ok));
-        }
-    }
-
     pub(super) fn start_spotify_sign_in(&self, ctx: &egui::Context) {
         let xfer = self.transfer.clone();
         if xfer.signing_in.swap(true, Ordering::Relaxed) {
@@ -70,5 +41,3 @@ impl App {
     }
 }
 
-/// File types YouTube Music accepts for upload.
-const UPLOAD_EXTS: &[&str] = &["mp3", "m4a", "flac", "ogg", "wma"];

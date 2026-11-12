@@ -273,23 +273,9 @@ impl App {
                 self.history = Some(h);
                 self.loading = false;
             }
-            Resp::Uploads(t) => {
-                self.uploads = Some(t);
-                if self.page == Page::Library(LibTab::Uploads) {
-                    self.loading = false;
-                }
-            }
             Resp::Downloaded { title, path } => {
                 log::info!("downloaded to {}", path.display());
                 self.toast(format!("Downloaded \u{201c}{title}\u{201d}"));
-            }
-            Resp::Uploaded { done, failed } => {
-                let songs = |n: usize| if n == 1 { "1 song".to_owned() } else { format!("{n} songs") };
-                self.toast(match (done, failed.len()) {
-                    (_, 0) => format!("Uploaded {}. It can take a minute for YouTube Music to process them.", songs(done)),
-                    (0, _) => format!("Upload failed: {}", failed.join(", ")),
-                    _ => format!("Uploaded {}; failed: {}", songs(done), failed.join(", ")),
-                });
             }
             Resp::Lyrics { video_id, lyrics } => {
                 if self.shown().is_some_and(|t| t.id == video_id) {
@@ -632,7 +618,6 @@ impl App {
         self.sidebar_cache = None;
         self.library = None;
         self.history = None;
-        self.uploads = None;
         // Your own playlists show differently (and private ones not at all) to another
         // account, and its likes aren't this one's.
         self.lists.clear();

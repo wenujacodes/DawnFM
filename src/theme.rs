@@ -290,7 +290,6 @@ pub mod icon {
     pub const SPARKLES: char = '\u{e412}';
     pub const CHECK: char = '\u{e06c}';
     pub const CIRCLE_USER: char = '\u{e461}';
-    pub const UPLOAD: char = '\u{e19e}';
     pub const USERS: char = '\u{e1a4}';
     pub const COPY: char = '\u{e09e}';
     pub const LINK: char = '\u{e102}';

@@ -295,7 +295,6 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         icon_row(ui, icon::MUSIC, "Songs", Page::Library(LibTab::Songs), lib(LibTab::Songs), &mut go_to);
         icon_row(ui, icon::DISC_3, "Albums", Page::Library(LibTab::Albums), lib(LibTab::Albums), &mut go_to);
         icon_row(ui, icon::HISTORY, "Recently Played", Page::Library(LibTab::History), lib(LibTab::History), &mut go_to);
-        icon_row(ui, icon::UPLOAD, "Uploads", Page::Library(LibTab::Uploads), lib(LibTab::Uploads), &mut go_to);
         nav(ui, glyphs::DOWNLOAD, APPLE, "Downloads", Page::Downloads, p == Page::Downloads, &mut go_to);
     }
     ui.add_space(6.0);

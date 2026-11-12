@@ -58,7 +58,7 @@
 
 **Accounts and library**
 - **Google sign-in** - unlock your YouTube Music feed, likes, playlists, history and recommendations.
-- **Library and uploads** - access saved music and uploaded tracks where available.
+- **Library** - your saved playlists, albums, liked songs and history.
 - **Listen Together / jams** - start or join a shared listening session.
 - **Spotify transfer** - bring playlists and liked music over from Spotify.
 

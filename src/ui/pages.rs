@@ -278,7 +278,6 @@ fn selectable<'a>(app: &'a App, page: &Page) -> Option<(&'a [Track], bool)> {
         }
         Page::Library(LibTab::Songs) => app.opened(super::LIKED_MUSIC).map(|o| (o.c.tracks.as_slice(), false)),
         Page::Library(LibTab::History) => app.history.as_deref().map(|h| (h, false)),
-        Page::Library(LibTab::Uploads) => app.uploads.as_deref().map(|u| (u, false)),
         _ => None,
     }
 }
@@ -976,7 +975,7 @@ fn library(app: &mut App, ui: &mut Ui, tab: LibTab, now: f64) {
     ui.add_space(12.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
-        for (t, label) in [(LibTab::Playlists, "Playlists"), (LibTab::Songs, "Liked songs"), (LibTab::Albums, "Albums"), (LibTab::History, "History"), (LibTab::Uploads, "Uploads")] {
+        for (t, label) in [(LibTab::Playlists, "Playlists"), (LibTab::Songs, "Liked songs"), (LibTab::Albums, "Albums"), (LibTab::History, "History")] {
             if chip(ui, label, tab == t).clicked() {
                 // Tabs swap in place (no history entry); the current one refreshes.
                 if tab == t {
@@ -1007,31 +1006,6 @@ fn library(app: &mut App, ui: &mut Ui, tab: LibTab, now: f64) {
             }
             let Some(h) = &app.history else { return };
             list(ui, &rows, &app.liked, h, true, plain, ListCtx { sel: &mut app.selection, page: &app.page, own: false }, &mut app.actions);
-        }
-        LibTab::Uploads => {
-            ui.horizontal(|ui| {
-                if pill(ui, "Upload music", Some(icon::UPLOAD), true).clicked() {
-                    app.pick_uploads(ui.ctx());
-                }
-                if app.uploads.as_ref().is_some_and(|u| !u.is_empty()) && pill(ui, "Shuffle", Some(icon::SHUFFLE), false).clicked() {
-                    let mut t = app.uploads.clone().unwrap_or_default();
-                    super::shuffle(&mut t);
-                    app.actions.push(Action::Play(t, 0));
-                }
-            });
-            ui.add_space(6.0);
-            ui.label(RichText::new("Or drop audio files anywhere on the window. MP3, M4A, FLAC, OGG and WMA.").font(theme::regular(13.0)).color(theme::text_dim()));
-            ui.add_space(12.0);
-            if app.uploads.is_none() {
-                placeholder(app, ui, now, 1, 48.0);
-                return;
-            }
-            let Some(up) = &app.uploads else { return };
-            if up.is_empty() {
-                ui.add_space(20.0);
-                ui.label(RichText::new("No uploads yet").color(theme::text_dim()));
-            }
-            list(ui, &rows, &app.liked, up, true, plain, ListCtx { sel: &mut app.selection, page: &app.page, own: false }, &mut app.actions);
         }
         // Liked Music, kept like any playlist.
         LibTab::Songs => {
@@ -1076,7 +1050,7 @@ fn library(app: &mut App, ui: &mut Ui, tab: LibTab, now: f64) {
                     grid(ui, &lib.playlists, &mut app.actions)
                 }
                 LibTab::Albums => grid(ui, &lib.albums, &mut app.actions),
-                LibTab::Songs | LibTab::History | LibTab::Uploads => unreachable!(),
+                LibTab::Songs | LibTab::History => unreachable!(),
             }
         }
     }

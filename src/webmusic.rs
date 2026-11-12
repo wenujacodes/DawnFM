@@ -270,49 +270,6 @@ impl Session {
         Ok(resp.error_for_status()?.json().await?)
     }
 
-    /// Upload an audio file to the account's library, like "Upload music" on
-    /// music.youtube.com: a resumable upload, started and then sent in one go.
-    pub async fn upload(&self, http: &reqwest::Client, path: &Path) -> anyhow::Result<()> {
-        const ORIGIN: &str = "https://music.youtube.com";
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let p = path.to_owned();
-        let bytes = tokio::task::spawn_blocking(move || std::fs::read(p)).await??;
-        anyhow::ensure!(bytes.len() <= 300 * 1024 * 1024, "{name} is larger than 300 MB");
-        let req = |url: &str| -> anyhow::Result<reqwest::RequestBuilder> {
-            let req = http
-                .post(url)
-                .header("User-Agent", UA)
-                .header("Origin", ORIGIN)
-                .header("X-Origin", ORIGIN)
-                .header("Content-Type", "application/x-www-form-urlencoded;charset=utf-8");
-            self.sign(req, ORIGIN)
-        };
-        let start = req(&format!("https://upload.youtube.com/upload/usermusic/http?authuser={}", self.session_index))?
-            .header("X-Goog-Upload-Command", "start")
-            .header("X-Goog-Upload-Header-Content-Length", bytes.len().to_string())
-            .header("X-Goog-Upload-Protocol", "resumable")
-            .body(format!("filename={name}"))
-            .timeout(std::time::Duration::from_secs(20))
-            .send()
-            .await?
-            .error_for_status()?;
-        let url = start
-            .headers()
-            .get("X-Goog-Upload-URL")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| anyhow::anyhow!("YouTube Music didn't accept the upload"))?
-            .to_owned();
-        req(&url)?
-            .header("X-Goog-Upload-Command", "upload, finalize")
-            .header("X-Goog-Upload-Offset", "0")
-            .body(bytes)
-            .timeout(std::time::Duration::from_secs(600))
-            .send()
-            .await?
-            .error_for_status()?;
-        Ok(())
-    }
-
     /// Whether the account has YouTube Premium, read from the YouTube top bar logo
     /// the way yt-dlp does.
     pub async fn is_premium(&self, http: &reqwest::Client) -> anyhow::Result<bool> {

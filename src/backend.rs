@@ -38,8 +38,6 @@ pub enum Req {
     Playlist { id: String, load: u64, stream: bool },
     Library,
     History,
-    /// Songs the account uploaded to YouTube Music.
-    Uploads,
     /// The signed-in account's name and photo.
     Account,
     /// The channels the signed-in Google account can act as.
@@ -49,8 +47,6 @@ pub enum Req {
     SwitchChannel { page_id: Option<String>, epoch: u64 },
     /// The queue another device left off with (YouTube Music's own cross-device queue).
     ServerQueue,
-    /// Upload audio files to the account's library.
-    Upload(Vec<PathBuf>),
     /// Save a song's audio to the downloads folder. `for_video`: the music video it's the
     /// song version of, which then plays it from the file (offline too).
     Download { track: Track, for_video: Option<String> },
@@ -114,12 +110,10 @@ impl Req {
             Req::Playlist { .. } => "Loading playlist",
             Req::Library => "Loading library",
             Req::History => "Loading history",
-            Req::Uploads => "Loading uploads",
             Req::Account => "Account",
             Req::Channels => "Channels",
             Req::SwitchChannel { .. } => "Switching channel",
             Req::ServerQueue => "Queue from other devices",
-            Req::Upload(_) => "Upload",
             Req::Download { .. } => "Download",
             Req::Lyrics(_) => "Lyrics",
             Req::Segments { .. } => "SponsorBlock",
@@ -258,14 +252,11 @@ pub enum Resp {
     Artist(ArtistPage),
     Library(Library),
     History(Vec<Track>),
-    Uploads(Vec<Track>),
     Account { name: Option<String> },
     Channels(Channels),
     /// A `Req::SwitchChannel` is done (requests go as `epoch` now), or `error` says why it isn't.
     SwitchedChannel { page_id: Option<String>, epoch: u64, error: Option<String> },
     ServerQueue(ytm::ServerQueue),
-    /// Upload finished: how many files went up, and which failed.
-    Uploaded { done: usize, failed: Vec<String> },
     Downloaded { title: String, path: PathBuf },
     /// Every source's lyrics for a song (empty when nobody has them).
     Lyrics { video_id: String, lyrics: LyricsSet },
@@ -314,7 +305,6 @@ impl Resp {
                 | Resp::Suggest { .. }
                 | Resp::Library(_)
                 | Resp::History(_)
-                | Resp::Uploads(_)
                 | Resp::Account { .. }
                 | Resp::Channels(_)
                 | Resp::ServerQueue(_)
@@ -697,7 +687,6 @@ impl Backend {
                 Req::Artist(id) => Resp::Artist(ytm::artist(api, &id).await?),
                 Req::Library => self.library().await?,
                 Req::History => Resp::History(ytm::history(api).await?),
-                Req::Uploads => Resp::Uploads(ytm::uploads(api).await?),
                 Req::Account => {
                     let (name, _photo) = ytm::account(api).await?;
                     Resp::Account { name }
@@ -718,7 +707,6 @@ impl Backend {
                     Some(q) => Resp::ServerQueue(q),
                     None => return Ok(None),
                 },
-                Req::Upload(files) => self.upload(&files).await?,
                 Req::Lyrics(track) => {
                     let video_id = track.id.clone();
                     Resp::Lyrics { lyrics: self.lyrics_for(&track).await, video_id }
@@ -914,37 +902,6 @@ impl Backend {
             playlists: pls.map(|p| p.into_iter().filter(saved_playlist_visible).collect()).unwrap_or_default(),
             albums: albums.unwrap_or_default(),
         }))
-    }
-
-    /// Upload songs, then refresh the uploads while YouTube Music processes them.
-    async fn upload(&self, files: &[PathBuf]) -> anyhow::Result<Resp> {
-        let api = &*self.api;
-        let session = api.account().ok_or_else(|| anyhow::anyhow!("sign in to upload music"))?;
-        let (mut done, mut failed) = (0, Vec::new());
-        for f in files {
-            let name = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            match session.upload(&self.http(), f).await {
-                Ok(()) => done += 1,
-                Err(e) => {
-                    log::warn!("upload {name}: {e:#}");
-                    failed.push(name);
-                }
-            }
-        }
-        if done > 0 {
-            // YouTube Music needs a little while to process new uploads.
-            let this = self.clone();
-            self.rt.spawn(async move {
-                for wait in [20, 40, 60] {
-                    tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
-                    if let Ok(t) = ytm::uploads(&this.api).await {
-                        let _ = this.tx.send(Resp::Uploads(t));
-                        this.wake();
-                    }
-                }
-            });
-        }
-        Ok(Resp::Uploaded { done, failed })
     }
 
     /// Open the next song's stream ahead of time, once the playing one has downloaded.
