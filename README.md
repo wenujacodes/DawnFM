@@ -1,27 +1,28 @@
 <div align="center">
-  <h1>BitChord</h1>
-  <p><strong>A fast, native YouTube Music desktop app - rebuilt in Rust.</strong></p>
+  <img src="assets/icon/icon.png" width="128" alt="Dusk FM icon">
+  <h1>Dusk FM</h1>
+  <p><strong>A fast, native YouTube Music app for macOS - built in Rust.</strong></p>
   <p>Built with egui and rodio. No Electron, no embedded browser player, and light on memory while playing.</p>
 
   <p>
-    <a href="https://github.com/jackychan4891/BitChord-PC-Continued/releases/latest"><img src="https://img.shields.io/github/v/release/jackychan4891/BitChord-PC-Continued?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
-    <a href="https://github.com/jackychan4891/BitChord-PC-Continued/releases"><img src="https://img.shields.io/github/downloads/jackychan4891/BitChord-PC-Continued/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
+    <a href="https://github.com/wenujacodes/DuskFM-Releases/releases/latest"><img src="https://img.shields.io/github/v/release/wenujacodes/DuskFM-Releases?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
+    <a href="https://github.com/wenujacodes/DuskFM-Releases/releases"><img src="https://img.shields.io/github/downloads/wenujacodes/DuskFM-Releases/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
     <img src="https://img.shields.io/badge/platform-macOS-333?style=flat-square&labelColor=0d1117" alt="Platforms">
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/jackychan4891/BitChord-PC-Continued?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/wenujacodes/DuskFM-Releases?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
   </p>
 
   <p>
     <a href="https://discord.gg/cWQSGjpXM">Discord</a> ·
-    <a href="https://github.com/jackychan4891/BitChord-PC-Continued/releases/latest">Download</a> ·
+    <a href="https://github.com/wenujacodes/DuskFM-Releases/releases/latest">Download</a> ·
     <a href="#features">Features</a> ·
     <a href="#installation">Installation</a> ·
     <a href="#building-from-source">Build from source</a>
   </p>
 </div>
 
-> **BitChord macOS** is a macOS-focused copy of [BitChord PC Continued](https://github.com/jackychan4891/BitChord-PC-Continued) by **[jackychan4891](https://github.com/jackychan4891)**. All credit for the original app goes to them. This repository is maintained separately by [wenujacodes](https://github.com/wenujacodes) and may be modified from the original.
+> **Dusk FM** is a macOS app based on [BitChord PC Continued](https://github.com/jackychan4891/BitChord-PC-Continued) by **[jackychan4891](https://github.com/jackychan4891)**. All credit for the original app goes to them. This repository is maintained separately by [wenujacodes](https://github.com/wenujacodes) and may be modified from the original.
 
-> BitChord is an independent, unofficial client. It is not affiliated with, endorsed by, or connected to YouTube, Google, or Apple.
+> Dusk FM is an independent, unofficial client. It is not affiliated with, endorsed by, or connected to YouTube, Google, or Apple.
 
 ## Screenshots
 
@@ -35,7 +36,7 @@
     <td align="center"><b>Browse</b> - your music, shelves and navigation</td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/readme/screenshot-3.png" alt="BitChord interface and playback" width="100%"></td>
+    <td colspan="2"><img src="docs/readme/screenshot-3.png" alt="Dusk FM interface and playback" width="100%"></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><b>Desktop experience</b> - native UI, fast playback, and quality controls</td>
@@ -66,28 +67,28 @@
 
 ## Installation
 
-Download the latest build from [Releases](https://github.com/wenujacodes/BitChord-macOS-Releases/releases/latest) when available, or build it yourself (below).
+Download the latest build from [Releases](https://github.com/wenujacodes/DuskFM-Releases/releases/latest) when available, or build it yourself (below).
 
-The app is signed ad hoc (there's no Developer ID), so macOS asks before its first launch: right-click `bitchord.app` and choose **Open**, or run `xattr -dr com.apple.quarantine bitchord.app`.
+The app is signed ad hoc (there's no Developer ID), so macOS asks before its first launch: right-click **Dusk FM** and choose **Open**, or run `xattr -dr com.apple.quarantine "/Applications/Dusk FM.app"`.
 
 ## Building from source
 
 You need the [Rust toolchain](https://rustup.rs/).
 
 ```sh
-git clone https://github.com/wenujacodes/BitChord-macOS.git
-cd BitChord-macOS
+git clone https://github.com/wenujacodes/DuskFM.git
+cd DuskFM
 cargo build --release
-macos/bundle.sh target/release/bitchord 2.0.0 out
+macos/bundle.sh target/release/duskfm 2.1.0 out
 ```
 
-This makes `out/bitchord.app` for your Mac's architecture (Apple Silicon or Intel).
+This makes `out/Dusk FM.app` for your Mac's architecture (Apple Silicon or Intel).
 
 ## Notes
 
 - Audio and the main interface are native (Rust + egui + rodio). Sign-in and some web flows may open a system webview window.
 - Hi-res/Lossless/Atmos playback depends on configured addon sources and whether a matching, playable copy exists for the selected track.
-- BitChord does not bypass subscriptions, DRM, or regional restrictions. Availability depends on the services and sources you use.
+- Dusk FM does not bypass subscriptions, DRM, or regional restrictions. Availability depends on the services and sources you use.
 - Third-party services (YouTube Music, lyrics providers, Discord, Last.fm, Spotify, addon sources) can change behavior over time.
 
 ## Contributing
@@ -96,13 +97,13 @@ Bug reports and pull requests are welcome. Please open an issue with clear repro
 
 ## License
 
-BitChord is licensed under [GPL-3.0](LICENSE).
+Dusk FM is licensed under [GPL-3.0](LICENSE).
 
 ## Credits
 
 BitChord was created by **[jackychan4891](https://github.com/jackychan4891)**, and this project is based on their work in [BitChord-PC-Continued](https://github.com/jackychan4891/BitChord-PC-Continued). Thanks to them and to all contributors of the original project.
 
-This copy is distributed under the same GPL-3.0 license, as the license requires. The original copyright notices are kept.
+Dusk FM is distributed under the same GPL-3.0 license, as the license requires. The original copyright notices are kept.
 
 ## Acknowledgements
 
