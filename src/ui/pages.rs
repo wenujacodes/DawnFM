@@ -351,6 +351,15 @@ fn selection_bar(app: &mut App, ctx: &egui::Context, page: &Page, area: Rect) {
 
 // ------------------------------------------------------------------ home
 
+/// A subtitle without its "1.2M plays" / "30K views" part.
+fn without_counts(s: &str) -> String {
+    let count = |p: &str| {
+        let p = p.trim().to_ascii_lowercase();
+        ["plays", "play", "views", "view"].iter().any(|w| p.ends_with(&format!(" {w}")) && p.starts_with(|c: char| c.is_ascii_digit()))
+    };
+    s.split(" • ").filter(|p| !count(p)).collect::<Vec<_>>().join(" • ")
+}
+
 fn home(app: &mut App, ui: &mut Ui, now: f64) {
     page_title(ui, "Home");
     // A refresh keeps showing the current feed; the skeleton is only for an empty one.
@@ -379,12 +388,15 @@ fn home(app: &mut App, ui: &mut Ui, now: f64) {
                     ui.spacing_mut().item_spacing.x = 20.0;
                     for c in cards {
                         let is_liked = matches!(&c.target, Target::Song(t) if liked.contains(&t.id));
-                        card(ui, c, tile, is_liked, acts);
+                        // Home shows no play or view counts.
+                        let c = Card { subtitle: without_counts(&c.subtitle), ..c.clone() };
+                        card(ui, &c, tile, is_liked, acts);
                     }
                 });
             }
             ShelfKind::Songs { tracks, rows: n } => {
-                let reached_end = song_grid(ui, &rows, &app.liked, &mut app.actions, &id, &s.title, s.strapline.as_deref(), tracks, *n);
+                let shown: Vec<Track> = tracks.iter().map(|t| Track { plays: None, ..t.clone() }).collect();
+                let reached_end = song_grid(ui, &rows, &app.liked, &mut app.actions, &id, &s.title, s.strapline.as_deref(), &shown, *n);
                 if s.title == "Quick picks" && reached_end && !h.picks_loading && !h.picks_expanded {
                     more_picks = tracks.last().map(|t| t.id.clone());
                 }
@@ -2043,3 +2055,13 @@ fn keycap(ui: &Ui, right: egui::Pos2, key: &str) -> f32 {
     rect.left()
 }
 
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn home_subtitles_lose_their_counts() {
+        assert_eq!(super::without_counts("Song • The Weeknd • 1.2B plays"), "Song • The Weeknd");
+        assert_eq!(super::without_counts("Playlist • YouTube Music • 30K views"), "Playlist • YouTube Music");
+        assert_eq!(super::without_counts("Album • 2Pac"), "Album • 2Pac");
+    }
+}
