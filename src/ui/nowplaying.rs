@@ -101,25 +101,29 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     let lift = 20.0 - f32::from(super::titlebar::top_margin(20, 44.0));
     let header = Rect::from_min_size(area.min - vec2(0.0, if app.fullscreen { 0.0 } else { lift }), vec2(area.width(), 44.0));
     let mut hui = ui.new_child(egui::UiBuilder::new().max_rect(header).layout(egui::Layout::left_to_right(egui::Align::Center)));
-    // The player's own close, top left; the window buttons keep the top right.
-    if icon_button(&mut hui, icon::CHEVRON_DOWN, 22.0, "Close now playing", false).clicked() {
-        app.np_open = false;
-        if app.fullscreen {
-            app.set_fullscreen(ui.ctx(), false);
-        }
-    }
+    let mut close = false;
     hui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.add_space(super::titlebar::right_gap(ui.ctx(), ui.max_rect(), 0.0));
+        // The player's own close (minimise back to the pages), top right: the macOS
+        // window buttons have the top left.
+        close = icon_button(ui, icon::CHEVRON_DOWN, 22.0, "Minimise now playing", false).clicked();
         // Its actions (like, download, share…) are for what's heard: a song version
         // standing in for the music video. It lives beside the star under the cover;
         // only when the cover column is hidden (a narrow window showing lyrics) does
         // it stay up here.
-        let cover_hidden = (narrow || cs.layout == Layout::LyricsOnly) && app.np_tab != NpTab::Art && !no_lyrics;
+        let beside = !narrow && cs.layout == Layout::LyricsOnly && look.background.mode == crate::preset::BgMode::CoverFullbleed;
+        let cover_hidden = (narrow || cs.layout == Layout::LyricsOnly) && !beside && app.np_tab != NpTab::Art && !no_lyrics;
         if cover_hidden {
             let (r, _) = ui.allocate_exact_size(vec2(34.0, 34.0), Sense::hover());
             options_menu(app, ui, r, &heard, app.np_tab == NpTab::Lyrics && !no_lyrics);
         }
     });
+    if close {
+        app.np_open = false;
+        if app.fullscreen {
+            app.set_fullscreen(ui.ctx(), false);
+        }
+    }
 
     let content = Rect::from_min_max(pos2(area.left(), header.bottom() + 12.0), area.max);
     // The side panel (lyrics / up next) slides in and out when its chip is toggled.
@@ -166,6 +170,17 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
         } else {
             // Hidden behind the lyrics: have it loaded for when they're turned off.
             widgets::preload_cover(ui.ctx(), &track.thumbs, px);
+        }
+        if beside_cover && art_vis < 0.999 {
+            // The song and its controls on a frosted card over the cover's bottom left.
+            let w = (content.width() * 0.38).clamp(300.0, 440.0);
+            let card = Rect::from_min_size(pos2(content.left() + 8.0, content.bottom() - 196.0), vec2(w + 40.0, 196.0));
+            let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(card));
+            cui.multiply_opacity(1.0 - art_vis);
+            cui.painter().rect_filled(card, 18.0, theme::shade(0.42));
+            cui.painter().rect_filled(card, 18.0, theme::glass(0.07));
+            cui.painter().rect_stroke(card, 18.0, egui::Stroke::new(1.0, theme::glass(0.12)), egui::StrokeKind::Inside);
+            sleeve(app, &mut cui, card.left() + 20.0, w, card.top() + 16.0, &track, no_lyrics, now);
         }
         if beside_cover { Rect::from_min_max(pos2(content.left() + content.width() * 0.46, content.top()), content.max) } else { content }
     } else {
@@ -231,9 +246,6 @@ fn art_side(cs: &crate::preset::CoverStyle, col: Rect) -> f32 {
 #[allow(clippy::too_many_arguments)]
 fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Track, no_lyrics: bool, now: f64, px: u32) {
     use crate::preset::Shape;
-    // A handoff's outgoing song is still what's heard: its star, menu and seek are its own.
-    let hold = app.mix_hold().map(|h| (h.total, h.mix, app.mix_hold_pos(h)));
-    let heard = if hold.is_some() { track.clone() } else { app.playing_track().cloned().unwrap_or_else(|| track.clone()) };
     let look = app.look();
     let cs = &look.cover;
     let side = art_side(cs, col);
@@ -279,10 +291,17 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
             ui.painter().rect_filled(art, cr, theme::shade(1.0 - cs.brightness));
         }
     }
-    // Title and artists: 17 semibold over 15 secondary, left-aligned to the art.
-    let w = side;
-    let x0 = art.left();
-    let info_y = art.bottom() + 22.0;
+    sleeve(app, ui, art.left(), side, art.bottom() + 22.0, track, no_lyrics, now);
+}
+
+/// The sleeve's information under the art (title, artists, star, ⋯), the seek line
+/// with its times and quality mark, then the transport, in a column `w` wide from `x0`,
+/// starting at `info_y`. About 175 points tall. Shared by the cover column and the
+/// card over a full-bleed cover.
+#[allow(clippy::too_many_arguments)]
+fn sleeve(app: &mut App, ui: &mut Ui, x0: f32, w: f32, info_y: f32, track: &crate::model::Track, no_lyrics: bool, now: f64) {
+    let hold = app.mix_hold().map(|h| (h.total, h.mix, app.mix_hold_pos(h)));
+    let heard = if hold.is_some() { track.clone() } else { app.playing_track().cloned().unwrap_or_else(|| track.clone()) };
     // The star and the ⋯ menu share the information line's right end.
     let text_w = w - 76.0;
     text_at(ui, pos2(x0, info_y), &track.title, theme::semibold(17.0), Color32::WHITE, text_w);
@@ -322,7 +341,7 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
     // The star: a 30 px disc that washes under the pointer and fills in the accent
     // once liked. The ⋯ menu sits at the line's end, as on music.youtube.com.
     let liked = app.liked.contains(&heard.id);
-    let star = Rect::from_center_size(pos2(art.right() - 55.0, info_y + 14.0), Vec2::splat(30.0));
+    let star = Rect::from_center_size(pos2((x0 + w) - 55.0, info_y + 14.0), Vec2::splat(30.0));
     let sr = ui.interact(star, ui.scope_id().with(("np-like", &heard.id)), Sense::click());
     let sr = named(sr, if liked { "Remove from favourites" } else { "Add to favourites" }).on_hover_cursor(egui::CursorIcon::PointingHand);
     let sh = theme::anim_bool(ui.ctx(), sr.id.with("h"), sr.hovered(), 0.1);
@@ -342,7 +361,7 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
         app.actions.push(Action::Like(heard.clone(), !liked));
     }
     // The song's options, beside the star.
-    let options = Rect::from_center_size(pos2(art.right() - 15.0, info_y + 14.0), Vec2::splat(34.0));
+    let options = Rect::from_center_size(pos2((x0 + w) - 15.0, info_y + 14.0), Vec2::splat(34.0));
     options_menu(app, ui, options, &heard, app.np_tab == NpTab::Lyrics && !no_lyrics);
 
     // Seek: a 4 px line that grows under the pointer, its times below.
@@ -434,7 +453,7 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
     let icons = [30.0f32, 40.0, 48.0, 40.0, 30.0];
     let gap = ((row_w - sizes.iter().sum::<f32>()) / 4.0).max(4.0);
     let mut xs = [0.0f32; 5];
-    let mut cx = art.center().x - row_w / 2.0;
+    let mut cx = (x0 + w / 2.0) - row_w / 2.0;
     for (i, s) in sizes.iter().enumerate() {
         xs[i] = cx + s / 2.0;
         cx += s + gap;

@@ -374,9 +374,11 @@ impl Preset {
             creators: vec!["wenujacodes".into()],
             blurb: "The app's own look: near-black pages tinted by the album art, a red accent, a floating sidebar and bold lyrics.".into(),
             accent: DEFAULT_ACCENT.into(),
-            background: Background { solid: "#0b090b".into(), page_dim: 0.45, ..Default::default() },
+            // Now playing: the cover fills the height on the left and fades into the
+            // lyrics on the right, the song and its controls on a card over it.
+            background: Background { mode: BgMode::CoverFullbleed, solid: "#0b090b".into(), page_dim: 0.45, ..Default::default() },
             lyrics: LyricStyle { weight: Weight::Bold, size: 1.15, inactive_alpha: 0.3, ..Default::default() },
-            cover: CoverStyle { radius: 10.0, ..Default::default() },
+            cover: CoverStyle { layout: Layout::LyricsOnly, radius: 10.0, ..Default::default() },
             chrome: Chrome { glass: 0.9, radius: 10.0, player_bar: PlayerBar::Docked },
             app: AppStyle {
                 page_bg: PageBg::Accent,
