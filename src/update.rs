@@ -1,6 +1,6 @@
 //! Automatic updates from GitHub releases.
 //!
-//! The app checks the latest release of wenujacodes/DuskFM-Releases at startup and
+//! The app checks the latest release of wenujacodes/DuskFM at startup and
 //! every few hours. A copy installed from the disk image downloads the new `.dmg` and
 //! puts the app from it in place of its own as it closes, or right away when the user
 //! picks "Restart to update". The portable build (a `portable.txt` inside the app
@@ -18,9 +18,9 @@ use crate::sync::MutexExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const LATEST: &str = "https://api.github.com/repos/wenujacodes/DuskFM-Releases/releases/latest";
-const BY_TAG: &str = "https://api.github.com/repos/wenujacodes/DuskFM-Releases/releases/tags/v";
-pub const RELEASES: &str = "https://github.com/wenujacodes/DuskFM-Releases/releases";
+const LATEST: &str = "https://api.github.com/repos/wenujacodes/DuskFM/releases/latest";
+const BY_TAG: &str = "https://api.github.com/repos/wenujacodes/DuskFM/releases/tags/v";
+pub const RELEASES: &str = "https://github.com/wenujacodes/DuskFM/releases";
 /// The app bundle in a release download (made by `macos/bundle.sh`), and its binary.
 const APP: &str = "Dusk FM.app";
 const BIN_IN_APP: &str = "Contents/MacOS/duskfm";

@@ -3,7 +3,7 @@ name = "duskfm"
 version = "2.1.0"
 edition = "2024"
 license = "GPL-3.0-only"
-repository = "https://github.com/wenujacodes/DuskFM-Releases"
+repository = "https://github.com/wenujacodes/DuskFM"
 description = "Dusk FM: a native YouTube Music app for macOS"
 
 [dependencies]

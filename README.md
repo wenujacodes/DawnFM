@@ -5,15 +5,15 @@
   <p>Built with egui and rodio. No Electron, no embedded browser player, and light on memory while playing.</p>
 
   <p>
-    <a href="https://github.com/wenujacodes/DuskFM-Releases/releases/latest"><img src="https://img.shields.io/github/v/release/wenujacodes/DuskFM-Releases?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
-    <a href="https://github.com/wenujacodes/DuskFM-Releases/releases"><img src="https://img.shields.io/github/downloads/wenujacodes/DuskFM-Releases/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
+    <a href="https://github.com/wenujacodes/DuskFM/releases/latest"><img src="https://img.shields.io/github/v/release/wenujacodes/DuskFM?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
+    <a href="https://github.com/wenujacodes/DuskFM/releases"><img src="https://img.shields.io/github/downloads/wenujacodes/DuskFM/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="Downloads"></a>
     <img src="https://img.shields.io/badge/platform-macOS-333?style=flat-square&labelColor=0d1117" alt="Platforms">
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/wenujacodes/DuskFM-Releases?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/wenujacodes/DuskFM?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
   </p>
 
   <p>
     <a href="https://discord.gg/cWQSGjpXM">Discord</a> ·
-    <a href="https://github.com/wenujacodes/DuskFM-Releases/releases/latest">Download</a> ·
+    <a href="https://github.com/wenujacodes/DuskFM/releases/latest">Download</a> ·
     <a href="#features">Features</a> ·
     <a href="#installation">Installation</a> ·
     <a href="#building-from-source">Build from source</a>
@@ -67,7 +67,7 @@
 
 ## Installation
 
-Download the latest build from [Releases](https://github.com/wenujacodes/DuskFM-Releases/releases/latest) when available, or build it yourself (below).
+Download the latest build from [Releases](https://github.com/wenujacodes/DuskFM/releases/latest) when available, or build it yourself (below).
 
 The app is signed ad hoc (there's no Developer ID), so macOS asks before its first launch: right-click **Dusk FM** and choose **Open**, or run `xattr -dr com.apple.quarantine "/Applications/Dusk FM.app"`.
 
