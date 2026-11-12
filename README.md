@@ -66,7 +66,7 @@
 
 ## Installation
 
-Download the latest build from [Releases](https://github.com/wenujacodes/BitChord-macOS/releases/latest) when available, or build it yourself (below).
+Download the latest build from [Releases](https://github.com/wenujacodes/BitChord-macOS-Releases/releases/latest) when available, or build it yourself (below).
 
 The app is signed ad hoc (there's no Developer ID), so macOS asks before its first launch: right-click `bitchord.app` and choose **Open**, or run `xattr -dr com.apple.quarantine bitchord.app`.
 

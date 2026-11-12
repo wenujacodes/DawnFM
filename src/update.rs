@@ -1,6 +1,6 @@
 //! Automatic updates from GitHub releases.
 //!
-//! The app checks the latest release of wenujacodes/BitChord-macOS at startup and
+//! The app checks the latest release of wenujacodes/BitChord-macOS-Releases at startup and
 //! every few hours. A copy installed from the disk image downloads the new `.dmg` and
 //! puts the app from it in place of its own as it closes, or right away when the user
 //! picks "Restart to update". The portable build (a `portable.txt` inside the app
@@ -18,9 +18,9 @@ use crate::sync::MutexExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const LATEST: &str = "https://api.github.com/repos/wenujacodes/BitChord-macOS/releases/latest";
-const BY_TAG: &str = "https://api.github.com/repos/wenujacodes/BitChord-macOS/releases/tags/v";
-pub const RELEASES: &str = "https://github.com/wenujacodes/BitChord-macOS/releases";
+const LATEST: &str = "https://api.github.com/repos/wenujacodes/BitChord-macOS-Releases/releases/latest";
+const BY_TAG: &str = "https://api.github.com/repos/wenujacodes/BitChord-macOS-Releases/releases/tags/v";
+pub const RELEASES: &str = "https://github.com/wenujacodes/BitChord-macOS-Releases/releases";
 /// The app bundle in a release download (made by `macos/bundle.sh`), and its binary.
 const APP: &str = "bitchord.app";
 const BIN_IN_APP: &str = "Contents/MacOS/bitchord";

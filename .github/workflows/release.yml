@@ -63,21 +63,48 @@ jobs:
           path: dist/*
 
   release:
-    name: Publish the release
+    name: Publish to the public releases repo
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # The full history, for the source zip and the list of changes since the last tag.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
-      - name: Create the GitHub Release
+      # GPL-3.0: the code is private, so every release carries its full source.
+      - name: Source code zip
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          git archive --format=zip -o "dist/BitChord-$v-source.zip" "$GITHUB_REF_NAME"
+          ls -lh dist
+
+      - name: Release notes
+        run: |
+          prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          {
+            echo "The app is signed ad hoc, so macOS asks before the first launch: right-click bitchord.app and choose Open."
+            echo
+            echo "- **Apple Silicon** (M1 and newer): \`arm64\` · **Intel**: \`x64\`"
+            echo "- \`.dmg\`: drag BitChord to Applications. \`-portable.zip\`: keeps its settings in a folder beside the app."
+            echo "- \`-source.zip\`: the full source code of this version (GPL-3.0)."
+            echo
+            echo "## Changes"
+            if [ -n "$prev" ]; then git log --no-merges --pretty='- %s' "$prev..$GITHUB_REF_NAME"; else echo "- First release"; fi
+          } > notes.md
+          cat notes.md
+
+      - name: Create the release in the public repo
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+          # A fine-grained token with Contents: read and write on BitChord-macOS-Releases.
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo wenujacodes/BitChord-macOS-Releases \
             --title "BitChord ${GITHUB_REF_NAME#v}" \
-            --generate-notes \
-            --notes "The app is signed ad hoc, so macOS asks before the first launch: right-click bitchord.app and choose Open. Pick arm64 for Apple Silicon Macs and x64 for Intel Macs. The -portable zip keeps its settings in a folder beside the app."
+            --notes-file notes.md
