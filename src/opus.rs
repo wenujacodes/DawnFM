@@ -272,4 +272,36 @@ mod tests {
             }
         }
     }
+
+    /// Signed out: how long a song takes from the `/player` call to its first decoded
+    /// sample, from the top and resuming mid-song, with the app's shared client.
+    /// `cargo test --release -- --ignored time_to_first_sample --nocapture`
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn time_to_first_sample() {
+        let api = crate::ytmapi::Api::new(&std::env::temp_dir().join("ytm-rs-opus-test"));
+        let vd = api.visitor_data(false).await.unwrap();
+        let http = crate::proxy::http();
+        for (id, at) in [("a4O-abCXsfA", 0.0), ("a4O-abCXsfA", 18.73), ("zuO2fClon98", 0.0), ("N48TFWsBA-k", 42.0)] {
+            let t0 = Instant::now();
+            let s = crate::innertube::audio_stream(&http, id, &vd, true).await.unwrap();
+            let player = t0.elapsed();
+            let shared = crate::stream::Shared::new(s.size, s.duration_ms, s.loudness_db, crate::stream::Format::from_opus(s.opus), None, false);
+            tokio::spawn(crate::stream::download(http.clone(), s.url, crate::innertube::UA.to_owned(), shared.clone(), None, crate::stream::Ranging::Query));
+            let at = Duration::from_secs_f64(at);
+            let (ready, first) = tokio::task::spawn_blocking(move || {
+                let mut d = crate::stream::decoder(shared.clone(), !at.is_zero()).unwrap();
+                if !at.is_zero() {
+                    d.try_seek(at).unwrap();
+                }
+                let ready = t0.elapsed();
+                d.next().unwrap();
+                shared.cancel();
+                (ready, t0.elapsed())
+            })
+            .await
+            .unwrap();
+            println!("{id} at {at:?}: player {player:?}, decoder ready {ready:?}, first sample {first:?}");
+        }
+    }
 }

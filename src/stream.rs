@@ -3,7 +3,9 @@
 //! The file is split into fixed blocks fetched by a few concurrent range requests.
 //! Workers always claim the first missing block at or after the one a reader is
 //! waiting on, so playback start and seeks are served first and the rest fills in
-//! around them. Reads of a missing block block until it arrives (or the download fails).
+//! around them. A block's bytes can be read as they arrive, so the decoder opens on the
+//! first few kilobytes rather than a whole block; reads past them wait for more (or for
+//! the download to fail).
 //!
 //! Several readers may share one buffer (the audio engine opens a second, seekable
 //! decoder when the user seeks); the download stops once the last reader is dropped.
@@ -72,6 +74,8 @@ pub enum Ranging {
 struct Inner {
     blocks: Vec<Option<Bytes>>,
     in_flight: Vec<bool>,
+    /// What has arrived so far of each block in flight (empty otherwise).
+    partial: Vec<Vec<u8>>,
     /// Block a reader most recently needed; workers prioritize from here.
     want: usize,
     error: Option<String>,
@@ -133,6 +137,7 @@ impl Shared {
             inner: Mutex::new(Inner {
                 blocks: vec![None; n],
                 in_flight: vec![false; n],
+                partial: vec![Vec::new(); n],
                 want: 0,
                 error: None,
                 readers: 0,
@@ -234,10 +239,33 @@ impl Shared {
         if missing || (inner.windowed && inner.readers > 0) { Claim::Wait } else { Claim::Done }
     }
 
+    /// The start of block `idx` arriving: readers may take it already.
+    fn grow(&self, idx: usize, chunk: &[u8]) {
+        let mut inner = self.inner.lock_unpoisoned();
+        let p = &mut inner.partial[idx];
+        if p.capacity() == 0 {
+            p.reserve_exact(BLOCK as usize);
+        }
+        p.extend_from_slice(chunk);
+        self.ready.notify_all();
+    }
+
+    /// Block `idx` starts over (a retry fetches it from its start again).
+    fn restart(&self, idx: usize) {
+        self.inner.lock_unpoisoned().partial[idx].clear();
+    }
+
+    /// Block `idx` has fully arrived through `grow`.
+    fn complete(&self, idx: usize) {
+        let data = std::mem::take(&mut self.inner.lock_unpoisoned().partial[idx]);
+        self.put(idx, Bytes::from(data));
+    }
+
     fn put(&self, idx: usize, data: Bytes) {
         let mut inner = self.inner.lock_unpoisoned();
         inner.blocks[idx] = Some(data);
         inner.in_flight[idx] = false;
+        inner.partial[idx] = Vec::new();
         if !std::mem::replace(&mut inner.ever[idx], true) {
             inner.fetched += 1;
             if inner.fetched == inner.blocks.len() {
@@ -325,21 +353,23 @@ pub async fn download(http: reqwest::Client, url: String, ua: String, shared: Ar
                 let (a, b) = shared.range(idx);
                 let mut attempt = 0;
                 loop {
+                    shared.restart(idx);
                     let (url, version) = slot.url.lock().await.clone();
                     // A refreshed URL is tied to the address that resolved it, which is the
                     // current shared client's (a proxy may have switched exits since).
                     let client = if version > 0 { crate::proxy::http() } else { http.clone() };
+                    let sink = |chunk: &[u8]| shared.grow(idx, chunk);
                     let res = if idx >= FAIL_FROM.load(std::sync::atomic::Ordering::Relaxed) {
                         Err(anyhow::anyhow!("simulated network failure"))
                     } else {
                         match ranging {
-                            Ranging::Query => fetch(&client, &format!("{url}&range={a}-{b}"), &ua, b - a + 1).await,
-                            Ranging::Header => fetch_range(&client, &url, &ua, a, b, shared.total).await,
+                            Ranging::Query => fetch(&client, &format!("{url}&range={a}-{b}"), &ua, b - a + 1, &sink).await,
+                            Ranging::Header => fetch_range(&client, &url, &ua, a, b, shared.total, &sink).await,
                         }
                     };
                     match res {
-                        Ok(data) => {
-                            shared.put(idx, data);
+                        Ok(()) => {
+                            shared.complete(idx);
                             break;
                         }
                         Err(e) if is_forbidden(&e) && slot.renew(version).await => {}
@@ -377,7 +407,8 @@ pub fn init_dev_hooks() {
     }
 }
 
-async fn fetch(http: &reqwest::Client, url: &str, ua: &str, expect: u64) -> anyhow::Result<Bytes> {
+/// Fetch `expect` bytes, handing each piece to `sink` as it arrives.
+async fn fetch(http: &reqwest::Client, url: &str, ua: &str, expect: u64, sink: &(dyn Fn(&[u8]) + Sync)) -> anyhow::Result<()> {
     let stalled = || anyhow::anyhow!("no data for {} s", STALL.as_secs());
     // Errors leave the URL out: it carries the client's IP address and signatures (logs).
     let mut resp = tokio::time::timeout(STALL, http.get(url).header("User-Agent", ua).send())
@@ -385,17 +416,19 @@ async fn fetch(http: &reqwest::Client, url: &str, ua: &str, expect: u64) -> anyh
         .map_err(|_| stalled())?
         .and_then(reqwest::Response::error_for_status)
         .map_err(reqwest::Error::without_url)?;
-    let mut buf = bytes::BytesMut::with_capacity(expect as usize);
+    let mut got = 0u64;
     while let Some(chunk) = tokio::time::timeout(STALL, resp.chunk()).await.map_err(|_| stalled())?.map_err(reqwest::Error::without_url)? {
-        buf.extend_from_slice(&chunk);
+        anyhow::ensure!(got + chunk.len() as u64 <= expect, "long read: more than {expect} bytes");
+        got += chunk.len() as u64;
+        sink(&chunk);
     }
-    anyhow::ensure!(buf.len() as u64 == expect, "short read: {} of {expect} bytes", buf.len());
-    Ok(buf.freeze())
+    anyhow::ensure!(got == expect, "short read: {got} of {expect} bytes");
+    Ok(())
 }
 
 /// A block from a server that takes standard `Range` headers. A 200 (the server ignored
-/// the range) still yields this block out of the whole body.
-async fn fetch_range(http: &reqwest::Client, url: &str, ua: &str, a: u64, b: u64, total: u64) -> anyhow::Result<Bytes> {
+/// the range) still yields this block out of the whole body, once it's all in.
+async fn fetch_range(http: &reqwest::Client, url: &str, ua: &str, a: u64, b: u64, total: u64, sink: &(dyn Fn(&[u8]) + Sync)) -> anyhow::Result<()> {
     let stalled = || anyhow::anyhow!("no data for {} s", STALL.as_secs());
     let mut resp = tokio::time::timeout(
         STALL,
@@ -411,15 +444,22 @@ async fn fetch_range(http: &reqwest::Client, url: &str, ua: &str, a: u64, b: u64
     .map_err(reqwest::Error::without_url)?;
     let partial = resp.status() == reqwest::StatusCode::PARTIAL_CONTENT;
     let expect = if partial { b - a + 1 } else { total };
-    let mut buf = bytes::BytesMut::with_capacity(expect as usize);
+    let mut buf = bytes::BytesMut::with_capacity(if partial { 0 } else { expect as usize });
+    let mut got = 0u64;
     while let Some(chunk) = tokio::time::timeout(STALL, resp.chunk()).await.map_err(|_| stalled())?.map_err(reqwest::Error::without_url)? {
-        buf.extend_from_slice(&chunk);
+        anyhow::ensure!(got + chunk.len() as u64 <= expect, "long read: more than {expect} bytes");
+        got += chunk.len() as u64;
+        if partial {
+            sink(&chunk);
+        } else {
+            buf.extend_from_slice(&chunk);
+        }
     }
-    anyhow::ensure!(buf.len() as u64 == expect, "short read: {} of {expect} bytes", buf.len());
-    if partial {
-        return Ok(buf.freeze());
+    anyhow::ensure!(got == expect, "short read: {got} of {expect} bytes");
+    if !partial {
+        sink(&buf[a as usize..=b as usize]);
     }
-    Ok(buf.freeze().slice(a as usize..=b as usize))
+    Ok(())
 }
 
 /// Whether the server honours a `Range` header with a 206. A server that answers 200
@@ -532,7 +572,9 @@ impl Read for StreamReader {
                 self.shared.changed.notify_waiters();
             }
         }
-        while inner.blocks[idx].is_none() {
+        let off = (self.pos - idx as u64 * BLOCK) as usize;
+        // The whole block, or as much of its start as has arrived past `off`.
+        while inner.blocks[idx].is_none() && inner.partial[idx].len() <= off {
             if let Some(e) = &inner.error {
                 return Err(io::Error::other(e.clone()));
             }
@@ -541,8 +583,10 @@ impl Read for StreamReader {
             }
             inner = self.shared.ready.wait(inner).unwrap();
         }
-        let block = inner.blocks[idx].as_ref().unwrap();
-        let off = (self.pos - idx as u64 * BLOCK) as usize;
+        let block: &[u8] = match &inner.blocks[idx] {
+            Some(b) => b,
+            None => &inner.partial[idx],
+        };
         let n = out.len().min(block.len() - off);
         out[..n].copy_from_slice(&block[off..off + n]);
         self.pos += n as u64;
@@ -698,5 +742,41 @@ impl rodio::Source for PcmSource {
         let byte = frame * self.channels as u64 * 2;
         self.reader.seek(SeekFrom::Start(byte)).map_err(|e| rodio::source::SeekError::Other(std::sync::Arc::new(e)))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A reader takes a block's first bytes while the rest is still on its way, and a
+    /// retry that starts the block over hands out the same bytes again.
+    #[test]
+    fn reads_a_block_as_it_arrives() {
+        let total = BLOCK + 10;
+        let shared = Shared::new(total, 0, None, Format::Opus, None, false);
+        let mut r = StreamReader::new(shared.clone());
+        shared.grow(0, b"abcd");
+        let mut buf = [0u8; 16];
+        assert_eq!(r.read(&mut buf).unwrap(), 4);
+        assert_eq!(&buf[..4], b"abcd");
+        // The rest arrives later, from another thread.
+        let s = shared.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            s.restart(0);
+            let mut block = b"abcd".to_vec();
+            block.resize(BLOCK as usize, 7);
+            s.grow(0, &block[..100]);
+            s.grow(0, &block[100..]);
+            s.complete(0);
+        });
+        assert_eq!(r.read(&mut buf).unwrap(), 16);
+        assert_eq!(buf, [7u8; 16]);
+        t.join().unwrap();
+        r.seek(SeekFrom::Start(BLOCK - 2)).unwrap();
+        assert_eq!(r.read(&mut buf).unwrap(), 2);
+        assert!(shared.inner.lock_unpoisoned().partial[0].is_empty());
+        assert!(shared.inner.lock_unpoisoned().blocks[0].is_some());
     }
 }
