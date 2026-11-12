@@ -1182,6 +1182,7 @@ fn settings(app: &mut App, ui: &mut Ui) {
 
 fn settings_body(app: &mut App, ui: &mut Ui) {
     page_title(ui, "Settings");
+    settings_updates(app, ui);
     settings_account(app, ui);
     settings_playback(app, ui);
     settings_downloads(ui);
@@ -1197,6 +1198,50 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
 }
 
 /// Settings › Account: signing in and out, and which channel to use.
+/// Settings › Updates: the version, what the updater is doing, and a button to check
+/// now (or restart into a downloaded update).
+fn settings_updates(app: &mut App, ui: &mut Ui) {
+    use crate::update::State;
+    section_label(ui, "Updates", None);
+    let version = crate::update::current_version();
+    let state = app.updater.as_ref().map(|u| u.state()).unwrap_or(State::Idle);
+    let can_update = super::updatable();
+    let status = match &state {
+        _ if !can_update => "Updates install in the app from the .dmg, opened from Applications.".to_owned(),
+        State::Idle => "Dawn FM checks for updates each time it opens.".to_owned(),
+        State::Checking => "Checking for updates…".to_owned(),
+        State::UpToDate => "You're up to date.".to_owned(),
+        State::Downloading { version, percent } => format!("Downloading Dawn FM {version}… {percent}%"),
+        State::Ready { version, .. } => format!("Dawn FM {version} is ready. Restart to update."),
+        State::Failed(e) => format!("Couldn't check for updates: {e}"),
+    };
+    let mut check = false;
+    let mut restart = false;
+    settings_card(ui, |ui| {
+        setting_row(ui, &format!("Dawn FM {version}"), Some(&status), |ui| {
+            match &state {
+                State::Ready { .. } => restart = pill(ui, "Restart to Update", Some(icon::SPARKLES), true).clicked(),
+                State::Checking | State::Downloading { .. } => {
+                    ui.spinner();
+                }
+                _ => {
+                    let resp = ui.add_enabled_ui(can_update, |ui| pill(ui, "Check for Updates", None, false)).inner;
+                    check = resp.clicked() && can_update;
+                }
+            }
+        });
+    });
+    if check
+        && let Some(u) = &app.updater
+    {
+        u.check();
+        app.update_checked = Some(ui.input(|i| i.time));
+    }
+    if restart {
+        app.restart_to_update(ui.ctx());
+    }
+}
+
 fn settings_account(app: &mut App, ui: &mut Ui) {
     section_label(ui, "Account", None);
     let busy = app.signing_in.load(Ordering::Relaxed);

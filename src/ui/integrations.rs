@@ -176,7 +176,7 @@ impl App {
         self.scrobble = None;
     }
 
-    /// Update checks: shortly after launch, then every six hours. A downloaded update is
+    /// Update checks: a few seconds after launch, then every six hours. A downloaded update is
     /// only offered as a notice; nothing installs until the user restarts for it.
     pub(super) fn tick_updates(&mut self, ctx: &egui::Context, now: f64) {
         use crate::update::{State, Updater};
@@ -186,7 +186,7 @@ impl App {
         }
         let Some(u) = self.updater.clone() else { return };
         let due = match self.update_checked {
-            None => now > 8.0,
+            None => now > 3.0,
             Some(t) => now - t > 6.0 * 3600.0 && !matches!(u.state(), State::Ready { .. }),
         };
         let enabled = updatable() && dev_var("YTM_BACKGROUND").is_none_or(|_| dev_var("YTM_UPDATE_FORCE").is_some() || dev_var("YTM_UPDATE_FEED").is_some());
@@ -195,7 +195,7 @@ impl App {
             u.check();
         } else if enabled {
             // An idle app doesn't repaint on its own: wake up when the next check is due.
-            let next = self.update_checked.map_or(8.0, |t| t + 6.0 * 3600.0);
+            let next = self.update_checked.map_or(3.0, |t| t + 6.0 * 3600.0);
             ctx.request_repaint_after(Duration::from_secs_f64((next - now).max(0.5) + 0.1));
         }
         if let State::Ready { version, .. } = u.state()
