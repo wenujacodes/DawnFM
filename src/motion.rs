@@ -18,6 +18,7 @@ pub struct Frame {
 }
 
 pub struct Motion {
+    #[allow(dead_code)] // read once `DECODES` is on
     url: String,
     latest: Mutex<Option<Arc<Frame>>>,
     version: AtomicU64,
@@ -35,6 +36,7 @@ impl Motion {
         Some((self.version.load(Ordering::Acquire), frame))
     }
 
+    #[allow(dead_code)] // for when `DECODES` is on
     pub fn url(&self) -> &str {
         &self.url
     }
@@ -44,6 +46,7 @@ impl Motion {
         self.stop.store(true, Ordering::Relaxed);
     }
 
+    #[allow(dead_code)] // the decoder calls this once `DECODES` is on
     fn publish(&self, ctx: &egui::Context, w: usize, h: usize, rgba: Vec<u8>) {
         if let Ok(mut slot) = self.latest.lock() {
             *slot = Some(Arc::new(Frame { w, h, rgba }));

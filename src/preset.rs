@@ -440,6 +440,7 @@ pub fn all() -> &'static [Preset] {
     })
 }
 
+#[cfg(test)]
 pub fn get(id: &str) -> &'static Preset {
     all().iter().find(|p| p.id == id).unwrap_or(&all()[0])
 }
@@ -457,6 +458,7 @@ pub fn active() -> &'static Preset {
 }
 
 /// The preset's cover thumbnail (JPEG), if it has one.
+#[cfg(test)]
 pub fn cover(id: &str) -> Option<&'static [u8]> {
     const COVERS: &[(&str, &[u8])] = include!(concat!(env!("OUT_DIR"), "/theme_covers.rs"));
     COVERS.iter().find(|(k, _)| *k == id).map(|(_, b)| *b)

@@ -85,6 +85,7 @@ impl Bezier {
 }
 
 pub const EASE: Bezier = Bezier(0.25, 0.1, 0.25, 1.0);
+#[allow(dead_code)] // kept with the other standard curves
 pub const EASE_IN: Bezier = Bezier(0.42, 0.0, 1.0, 1.0);
 pub const EASE_OUT: Bezier = Bezier(0.0, 0.0, 0.58, 1.0);
 pub const EASE_IN_OUT: Bezier = Bezier(0.42, 0.0, 0.58, 1.0);

@@ -22,6 +22,7 @@ const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (
 #[derive(Clone, Debug, Default)]
 pub struct Motion {
     pub square: Option<String>,
+    #[allow(dead_code)] // parsed for hero banners, which don't show motion yet
     pub wide: Option<String>,
 }
 
@@ -467,11 +468,6 @@ fn url_after_key<'a>(html: &'a str, anchor: &str, key: &str) -> Option<&'a str> 
     let tail = &rest[i..];
     let end = tail.find('"')?;
     Some(&tail[..end])
-}
-
-fn mvod(u: Option<&str>) -> Option<String> {
-    let u = u?.replace("\\/", "/");
-    u.starts_with("https://").then_some(u)
 }
 
 fn url_escape(s: &str) -> String {

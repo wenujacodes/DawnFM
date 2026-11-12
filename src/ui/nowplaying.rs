@@ -6,7 +6,7 @@ use egui::{Color32, Rect, Sense, Ui, Vec2, pos2, vec2};
 
 use super::widgets::{self, icon_button, named, text_at};
 use super::{Action, App, NpTab, Repeat, karaoke};
-use crate::lyrics::{Lyrics, Provider, Sync, SyncKind};
+use crate::lyrics::{Lyrics, Sync, SyncKind};
 use crate::shader::Params;
 use crate::theme::{self, icon};
 
@@ -970,7 +970,7 @@ fn quality_icon_aspect(atmos: bool) -> f32 {
 /// The icon as white pixels with its own alpha, so it takes the badge's tint.
 fn quality_icon_texture(ui: &Ui, atmos: bool) -> egui::TextureHandle {
     let ctx = ui.ctx();
-    let id = egui::Id::new(("quality-icon", atmos));
+    let id = egui::Id::unique(("quality-icon", atmos));
     if let Some(tex) = ctx.data(|d| d.get_temp::<egui::TextureHandle>(id)) {
         return tex;
     }

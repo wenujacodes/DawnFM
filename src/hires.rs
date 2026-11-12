@@ -17,7 +17,6 @@ pub const USER_AGENT: &str = concat!("BitChord/v", env!("CARGO_PKG_VERSION"));
 const TIER: &str = "LOSSLESS";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
-const SEARCH_LIMIT: usize = 25;
 /// How many of the search's candidates get a `/stream` call before giving up.
 const STREAM_TRIES: usize = 3;
 

@@ -478,7 +478,7 @@ impl App {
             }
             Resp::ServerQueue(q) => self.adopt_server_queue(q),
             // The profile picture isn't shown anywhere, so it isn't kept.
-            Resp::Account { name, photo: _ } => {
+            Resp::Account { name } => {
                 self.account_name = name.or(self.account_name.take());
             }
             Resp::Channels(c) => self.channels = Some(c),

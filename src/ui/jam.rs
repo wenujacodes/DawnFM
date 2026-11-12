@@ -83,10 +83,6 @@ impl Session {
     pub fn guest(&self) -> bool {
         self.active() && !self.is_host()
     }
-
-    pub fn member_count(&self) -> usize {
-        self.members.len()
-    }
 }
 
 fn my_name(app: &App) -> String {

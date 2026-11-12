@@ -259,7 +259,7 @@ pub enum Resp {
     Library(Library),
     History(Vec<Track>),
     Uploads(Vec<Track>),
-    Account { name: Option<String>, photo: Option<String> },
+    Account { name: Option<String> },
     Channels(Channels),
     /// A `Req::SwitchChannel` is done (requests go as `epoch` now), or `error` says why it isn't.
     SwitchedChannel { page_id: Option<String>, epoch: u64, error: Option<String> },
@@ -699,8 +699,8 @@ impl Backend {
                 Req::History => Resp::History(ytm::history(api).await?),
                 Req::Uploads => Resp::Uploads(ytm::uploads(api).await?),
                 Req::Account => {
-                    let (name, photo) = ytm::account(api).await?;
-                    Resp::Account { name, photo }
+                    let (name, _photo) = ytm::account(api).await?;
+                    Resp::Account { name }
                 }
                 Req::Channels => {
                     let epoch = api.epoch();

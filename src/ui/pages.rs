@@ -741,7 +741,7 @@ fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
             egui::TextEdit::singleline(query)
                 .hint_text(egui::RichText::new("Search in this list").color(theme::text_faint()))
                 .font(theme::regular(14.0))
-                .vertical_align(egui::Align::Center)
+                .align(egui::Align2::LEFT_CENTER)
                 .frame(egui::Frame::NONE)
                 .desired_width(inner.width()),
         );
@@ -1784,13 +1784,6 @@ fn network(app: &mut App, ui: &mut Ui) {
             app.restart(ui.ctx());
         }
     }
-}
-
-/// Paint `v` into `rect`, from the ICO entry that fits its size in physical pixels.
-pub(super) fn paint_app_icon(ui: &Ui, v: &crate::appicon::Variant, rect: Rect) {
-    let px = (rect.width() * ui.ctx().pixels_per_point()).ceil() as u32;
-    let png = v.png(px);
-    egui::Image::from_bytes(format!("bytes://app-icon/{}-{}.png", v.id, png.len()), png).paint_at(ui, rect);
 }
 
 /// The font setting: the theme's own, a bundled face, or one installed on this PC.

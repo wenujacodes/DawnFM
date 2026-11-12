@@ -9,6 +9,7 @@ use std::path::Path;
 
 pub struct Variant {
     pub id: &'static str,
+    #[allow(dead_code)] // display name, for when the icon picker comes back
     pub name: &'static str,
     /// An ICO whose entries are PNGs, from 16 to 256 px.
     ico: &'static [u8],
