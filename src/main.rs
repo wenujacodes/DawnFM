@@ -82,6 +82,8 @@ fn main() -> eframe::Result {
         return Ok(());
     }
     init_logging();
+    // Jam links on macOS come as an Apple Event, not argv: catch it before the loop starts.
+    deeplink::install();
     update::clean_portable();
     stream::init_dev_hooks();
     proxy::init(&data_dir());
@@ -141,7 +143,7 @@ fn main() -> eframe::Result {
                 }
             };
 
-            // Jam links from later launches arrive over a pipe (first instance only).
+            // Jam links (the Apple Event handler in `deeplink`) wake the UI through this.
             deeplink::listen(wake);
             // Keep `ytm-rs:` links pointing at this copy; dev builds leave it alone
             // (even with YTM_UPDATE_FORCE).

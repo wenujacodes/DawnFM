@@ -54,6 +54,9 @@ unicode-bidi = "0.3"
 # The login Keychain for the sign-ins.
 keyring = { version = "3.6.3", features = ["apple-native"] }
 libc = "0.2"
+# Jam links: the kAEGetURL Apple Event handler (deeplink.rs). The versions winit/wry lock.
+objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString"] }
 
 [profile.release]
 opt-level = 3
