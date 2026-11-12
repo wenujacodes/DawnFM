@@ -470,9 +470,9 @@ impl App {
                 }
             }
             Resp::ServerQueue(q) => self.adopt_server_queue(q),
-            Resp::Account { name, photo } => {
+            // The profile picture isn't shown anywhere, so it isn't kept.
+            Resp::Account { name, photo: _ } => {
                 self.account_name = name.or(self.account_name.take());
-                self.account_avatar = photo.or(self.account_avatar.take());
             }
             Resp::Channels(c) => self.channels = Some(c),
             Resp::SwitchedChannel { page_id, epoch, error } => {
@@ -497,10 +497,6 @@ impl App {
 
     /// The home feed, replacing the one shown.
     fn on_home(&mut self, page: HomePage) {
-        // Until the account menu answers (Req::Account).
-        if self.account_avatar.is_none() {
-            self.account_avatar = page.shelves.iter().find(|s| s.title == "Listen again").and_then(|s| s.strap_thumb.clone());
-        }
         let mut chips = page.chips;
         // The feed marks the active mood itself; keep the bar when it doesn't send chips.
         if chips.is_empty() {
@@ -626,7 +622,6 @@ impl App {
         self.forgets_pending = 0;
         self.suggest_due = Some(now);
         self.account_name = None;
-        self.account_avatar = None;
         self.sidebar_cache = None;
         self.library = None;
         self.history = None;

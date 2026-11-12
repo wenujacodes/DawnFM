@@ -641,7 +641,8 @@ fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
                     RichText::new(format!("{} songs • {} min", tracks.len(), total / 60)).font(theme::regular(13.5)).color(theme::text_faint()),
                 );
             }
-            if let Some(d) = c.description.as_deref().filter(|d| !d.trim().is_empty()) {
+            // Playlists keep their description; albums show none.
+            if let Some(d) = c.description.as_deref().filter(|d| !is_album && !d.trim().is_empty()) {
                 ui.add_space(6.0);
                 let g = widgets::galley_wrapped(ui, d.trim(), theme::regular(13.5), theme::text_dim(), ui.available_width(), 2);
                 ui.label(g);
@@ -1158,7 +1159,7 @@ fn settings_account(app: &mut App, ui: &mut Ui) {
     settings_card(ui, |ui| {
         if app.logged_in {
             let name = app.account_name.clone().unwrap_or_else(|| "YouTube Music".to_owned());
-            setting_row(ui, &name, Some("Signed in with Google. Your home feed, library and likes come from this account. Saved encrypted in Windows Credential Manager."), |ui| {
+            setting_row(ui, &name, Some("Signed in with Google. Your home feed, library and likes come from this account. Saved in your macOS Keychain."), |ui| {
                 sign_out = pill(ui, "Sign out", Some(icon::LOG_OUT), false).clicked();
             });
             // Also with one, when the one in use isn't it (a brand channel since deleted).

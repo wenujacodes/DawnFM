@@ -435,23 +435,6 @@ pub fn top_bar(app: &mut App, ui: &mut Ui) {
     let row = Rect::from_min_size(panel.min, vec2(panel.width(), 44.0));
     let right = panel.right() - super::titlebar::right_gap(ui.ctx(), row, 20.0);
     let r = Rect::from_min_max(pos2(right - 36.0, panel.top()), pos2(right, panel.top() + 36.0));
-    let resp = ui.interact(r, ui.scope_id().with("account"), Sense::click());
-    let resp = named(resp, "Account").on_hover_cursor(egui::CursorIcon::PointingHand);
-    let initial = app.account_name.as_deref().and_then(|n| n.chars().next()).unwrap_or('?');
-    if app.logged_in {
-        ui.painter().circle_filled(r.center(), 18.0, theme::lerp_color(app.accent_color(), Color32::BLACK, 0.35));
-        if let Some(avatar) = &app.account_avatar {
-            widgets::paint_remote(ui, avatar, r, 18.0, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
-        } else {
-            ui.painter().text(r.center(), Align2::CENTER_CENTER, initial, theme::bold(16.0), Color32::WHITE);
-        }
-    } else {
-        ui.painter().circle_filled(r.center(), 18.0, theme::glass(0.12));
-        icon_at(ui, r.center(), icon::USER, 18.0, theme::text_dim());
-    }
-    if resp.clicked() {
-        app.actions.push(Action::Go(Page::Settings));
-    }
     if app.loading {
         let spin = Rect::from_min_size(pos2(r.left() - 34.0, r.top() + 8.0), Vec2::splat(20.0));
         let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(spin));
@@ -681,26 +664,48 @@ fn suggestion_text(ui: &Ui, pos: Pos2, text: &str, typed: &str, width: f32) {
 /// The player: one frosted capsule floating over the bottom of the window, as in the
 /// BitChord desktop app. Transport on the left, the sleeve with its titles and seek
 /// line in the middle, favourites / lyrics / queue / volume on the right.
+/// Height of the docked player strip.
+pub const DOCKED_H: f32 = 64.0;
+
+/// Whether the theme docks the player to the window's bottom edge.
+pub fn docked(app: &App) -> bool {
+    app.look().chrome.player_bar == crate::preset::PlayerBar::Docked
+}
+
 pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let full = ui.max_rect();
-    if frosted {
-        // The page scrolls on under this strip: fade it out rather than end it at the
-        // player's edge. Clicks in the fade stay with the player, not the rows beneath.
-        vgradient(ui.painter(), full, theme::panel(0.0), theme::panel(0.66));
-        ui.interact(full, ui.id().with("player-strip"), Sense::hover());
+    // A docked strip is opaque and takes clicks across its whole width.
+    if docked(app) {
+        ui.interact(full, ui.scope_id().with("player-strip"), Sense::hover());
     }
-    const H: f32 = 56.0;
-    let w = (full.width() - 24.0).min(668.0);
-    let cap = Rect::from_min_size(pos2(full.center().x - w / 2.0, full.bottom() - 16.0 - H), vec2(w, H));
     let ctx = ui.ctx().clone();
-    widgets::soft_shadow(ui, cap, H / 2.0, 20.0, 0.45);
-    // Frosted: the page's colours show through a milky pane, with a lit top half and
-    // a bright rim standing in for the blur egui can't do.
-    ui.painter().rect_filled(cap, H / 2.0, theme::panel(0.88));
-    let top = Rect::from_min_max(cap.min, pos2(cap.max.x, cap.min.y + H * 0.55));
-    ui.painter().rect_filled(top, egui::CornerRadius { nw: 28, ne: 28, sw: 0, se: 0 }, theme::glass(0.07));
-    ui.painter().rect_stroke(cap, H / 2.0, egui::Stroke::new(1.0, theme::glass(0.2)), egui::StrokeKind::Inside);
-    ui.painter().hline(cap.x_range().shrink(26.0), cap.top() + 1.0, egui::Stroke::new(1.0, theme::glass(0.24)));
+    let cap = if docked(app) {
+        // Docked: a full-width strip on the window's bottom edge, with a hairline on top.
+        let cap = Rect::from_min_max(pos2(full.left(), full.bottom() - DOCKED_H), full.max);
+        ui.painter().rect_filled(cap, 0.0, app.look().solid());
+        ui.painter().rect_filled(cap, 0.0, theme::glass(0.035));
+        ui.painter().hline(cap.x_range(), cap.top(), egui::Stroke::new(1.0, theme::glass(0.08)));
+        cap.shrink2(vec2(12.0, 0.0))
+    } else {
+        if frosted {
+            // The page scrolls on under this strip: fade it out rather than end it at the
+            // player's edge. Clicks in the fade stay with the player, not the rows beneath.
+            vgradient(ui.painter(), full, theme::panel(0.0), theme::panel(0.66));
+            ui.interact(full, ui.id().with("player-strip"), Sense::hover());
+        }
+        const H: f32 = 56.0;
+        let w = (full.width() - 24.0).min(668.0);
+        let cap = Rect::from_min_size(pos2(full.center().x - w / 2.0, full.bottom() - 16.0 - H), vec2(w, H));
+        widgets::soft_shadow(ui, cap, H / 2.0, 20.0, 0.45);
+        // Frosted: the page's colours show through a milky pane, with a lit top half and
+        // a bright rim standing in for the blur egui can't do.
+        ui.painter().rect_filled(cap, H / 2.0, theme::panel(0.88));
+        let top = Rect::from_min_max(cap.min, pos2(cap.max.x, cap.min.y + H * 0.55));
+        ui.painter().rect_filled(top, egui::CornerRadius { nw: 28, ne: 28, sw: 0, se: 0 }, theme::glass(0.07));
+        ui.painter().rect_stroke(cap, H / 2.0, egui::Stroke::new(1.0, theme::glass(0.2)), egui::StrokeKind::Inside);
+        ui.painter().hline(cap.x_range().shrink(26.0), cap.top() + 1.0, egui::Stroke::new(1.0, theme::glass(0.24)));
+        cap
+    };
 
     let status = app.audio.status.clone();
     // An Automix handoff keeps the outgoing song on this strip until the next one is

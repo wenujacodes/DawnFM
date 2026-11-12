@@ -380,8 +380,8 @@ impl Preset {
             chrome: Chrome { glass: 0.9, radius: 10.0, player_bar: PlayerBar::Docked },
             app: AppStyle {
                 page_bg: PageBg::Accent,
-                sidebar: SidebarStyle::Floating,
-                sidebar_alpha: 0.35,
+                sidebar: SidebarStyle::Glass,
+                sidebar_alpha: 0.3,
                 bar_alpha: 0.8,
                 nav: NavStyle::Accent,
                 chip: ChipStyle::Accent,

@@ -16,9 +16,19 @@ const BUTTON_W: f32 = 46.0;
 const EDGE: f32 = 5.0;
 const CORNER: f32 = 14.0;
 
-/// Whether the app draws the title bar itself. Never on macOS, which keeps the system's.
+/// Whether the app draws the title bar itself. Never on macOS: the system's buttons
+/// stay, over a hidden title bar (see `main`).
 pub fn custom() -> bool {
     false
+}
+
+/// How far down the sidebar starts so its first row clears the macOS window buttons.
+pub const MAC_BUTTONS_CLEAR: i8 = 40;
+
+/// Whether the top strip moves the window: the title bar is hidden, so the empty top
+/// of the window does what it did. Not in full screen.
+fn draggable(ctx: &egui::Context) -> bool {
+    !ctx.data(|d| d.get_temp::<bool>(Id::unique("titlebar-fullscreen")).unwrap_or(false)) && !ctx.input(|i| i.viewport().fullscreen.unwrap_or(false))
 }
 
 /// Full screen has no title bar. The app's own full screen (`crate::fullscreen`) goes
@@ -71,7 +81,7 @@ pub fn right_gap(ctx: &egui::Context, row: Rect, normal: f32) -> f32 {
 /// itself (egui forgets a press on something click-only once it moves too far for a
 /// click), and then dragged. Not focusable: Tab skips it.
 pub fn drag_area(ui: &Ui, rect: Rect, id: &str) {
-    if !shown(ui.ctx()) {
+    if !draggable(ui.ctx()) {
         return;
     }
     if drag_strip(ui, rect, id).double_clicked() {

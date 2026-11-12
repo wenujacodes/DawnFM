@@ -337,7 +337,6 @@ pub struct App {
     unliking: HashMap<String, Track>,
     selection: Selection,
     account_name: Option<String>,
-    account_avatar: Option<String>,
     /// The signed-in account's channels and which one is used, once Settings asked.
     channels: Option<crate::backend::Channels>,
     /// When they were last asked for (`ui.input` time).
@@ -644,7 +643,6 @@ impl App {
             unliking: HashMap::new(),
             selection: Selection::default(),
             account_name: None,
-            account_avatar: None,
             channels: None,
             channels_asked: None,
             switching_to: None,
@@ -821,7 +819,6 @@ impl App {
             && let Some(c) = get("account_cache").and_then(|j| serde_json::from_str::<AccountCache>(&j).ok())
         {
             app.account_name = c.name;
-            app.account_avatar = c.avatar;
             app.sidebar_cache = Some(c.playlists).filter(|p| !p.is_empty());
         }
         // Dev hook: YTM_QUEUE opens the queue drawer.
@@ -1080,7 +1077,7 @@ impl App {
     /// Height of the bottom player area: the capsule's 56 points plus the margin it
     /// floats on.
     fn bar_height(&self) -> f32 {
-        86.0
+        if shell::docked(self) { shell::DOCKED_H } else { 86.0 }
     }
 
     fn toast(&mut self, msg: impl Into<String>) {
@@ -1265,7 +1262,8 @@ impl eframe::App for App {
             use crate::preset::SidebarStyle;
             let side_alpha = app_style.sidebar_alpha.clamp(0.0, 1.0);
             // The logo's row is 32 points tall.
-            let side_margin = egui::Margin { left: 14, right: 14, top: titlebar::top_margin(16, 32.0), bottom: 16 };
+            // The macOS window buttons sit over the sidebar's top-left: start below them.
+            let side_margin = egui::Margin { left: 14, right: 14, top: titlebar::top_margin(16, 32.0).max(titlebar::MAC_BUTTONS_CLEAR), bottom: 16 };
             let side_frame = match app_style.sidebar {
                 SidebarStyle::Glass => egui::Frame::new().fill(theme::panel(side_alpha)).inner_margin(side_margin),
                 SidebarStyle::Transparent => egui::Frame::new().inner_margin(side_margin),
@@ -1387,7 +1385,7 @@ impl eframe::App for App {
         storage.set_string("jam_name", self.jam.name.clone());
         let cache = self.logged_in.then(|| AccountCache {
             name: self.account_name.clone(),
-            avatar: self.account_avatar.clone(),
+            avatar: None,
             playlists: self.library.as_ref().map(|l| l.playlists.clone()).or_else(|| self.sidebar_cache.clone()).unwrap_or_default(),
         });
         storage.set_string("account_cache", cache.and_then(|c| serde_json::to_string(&c).ok()).unwrap_or_default());
