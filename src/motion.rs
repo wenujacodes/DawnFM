@@ -59,10 +59,17 @@ impl Drop for Motion {
     }
 }
 
+/// No decoder on macOS yet: fetching a clip would only fill the cache with video
+/// nothing plays. Turn on together with `decode`.
+const DECODES: bool = false;
+
 static STREAMS: LazyLock<Mutex<HashMap<String, Weak<Motion>>>> = LazyLock::new(Default::default);
 
 /// Start (or reuse) the clip at `master`, decoded no wider than `max_width`.
 pub fn play(ctx: &egui::Context, master: &str, max_width: u32) -> Arc<Motion> {
+    if !DECODES {
+        return Arc::new(Motion::new(master));
+    }
     let key = format!("{max_width}:{master}");
     if let Ok(mut streams) = STREAMS.lock() {
         if let Some(m) = streams.get(&key).and_then(Weak::upgrade) {
