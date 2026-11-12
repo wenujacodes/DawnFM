@@ -464,7 +464,7 @@ fn spotify_account_row(app: &mut App, ui: &mut Ui, account: &Account, compact: b
         ),
         Account::SignedIn { name, .. } => {
             let who = if name.is_empty() { "Signed in".to_owned() } else { format!("Signed in as {name}") };
-            ("Spotify account".to_owned(), format!("{who}. Saved encrypted in Windows Credential Manager."))
+            ("Spotify account".to_owned(), format!("{who}. Saved in your macOS Keychain."))
         }
         Account::Unknown | Account::Loading => ("Spotify account".to_owned(), "Checking your sign-in…".to_owned()),
         Account::SignedOut if compact => ("Not signed in".to_owned(), "Needed for Liked Songs and private playlists. Public playlists work without it.".to_owned()),

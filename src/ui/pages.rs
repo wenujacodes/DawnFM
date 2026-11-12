@@ -1257,7 +1257,7 @@ fn settings_playback(app: &mut App, ui: &mut Ui) {
             toggle(ui, &mut app.play_songs, "Play songs, not music videos");
         });
         divider(ui);
-        setting_row(ui, "Output device", Some("Where the music plays. A picked device that isn't connected leaves it to Windows' default until it's back."), |ui| {
+        setting_row(ui, "Output device", Some("Where the music plays. A picked device that isn't connected leaves it to the Mac's default until it's back."), |ui| {
             output_device_picker(app, ui);
         });
         divider(ui);
@@ -1704,10 +1704,10 @@ fn network(app: &mut App, ui: &mut Ui) {
         Setting::System => {
             divider(ui);
             let desc = match proxy::system() {
-                Some(p) => format!("Windows is set to use {}.", proxy::redact(&p)),
-                None => "Windows isn't set to use a proxy, so BitChord connects directly.".to_owned(),
+                Some(p) => format!("Using {}.", proxy::redact(&p)),
+                None => "BitChord uses the HTTPS_PROXY or HTTP_PROXY environment variable when one is set, and otherwise connects directly.".to_owned(),
             };
-            setting_row(ui, "Windows proxy", Some(&desc), |_| {});
+            setting_row(ui, "System proxy", Some(&desc), |_| {});
         }
         Setting::Custom(_) => {
             divider(ui);
@@ -1720,7 +1720,7 @@ fn network(app: &mut App, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 save = pill(ui, if saved { "Saved" } else { "Save" }, None, !saved).clicked() && !saved;
                 ui.add_space(8.0);
-                ui.label(RichText::new("A password in the address is kept in Windows Credential Manager.").font(theme::regular(12.5)).color(theme::text_dim()));
+                ui.label(RichText::new("The address, password included, is kept in your macOS Keychain.").font(theme::regular(12.5)).color(theme::text_dim()));
             });
             if save {
                 match proxy::save(app.backend.data_dir(), &custom) {
@@ -1838,7 +1838,7 @@ fn font_picker(ui: &mut Ui) -> Option<String> {
     picked.filter(|p| *p != current)
 }
 
-const SYSTEM_DEFAULT: &str = "Windows default";
+const SYSTEM_DEFAULT: &str = "System default";
 
 fn output_device_picker(app: &mut App, ui: &mut Ui) {
     let current = match &app.output_device {
