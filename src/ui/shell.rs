@@ -187,17 +187,11 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     // Content width when expanded: text keeps its truncation while the panel narrows.
     let full_w = ui.available_width() + (SIDEBAR_W - RAIL_W) * t;
 
-    // Logo, with the page history right-aligned on the same line.
+    // The page history, right-aligned on the top line (no logo: the row keeps its height).
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.add_space(8.0);
-        let (r, resp) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
-        mark(ui, Rect::from_center_size(r.center(), vec2(30.0, 20.0)), theme::with_alpha(theme::text(), a));
-        let resp = named(resp, "Home");
-        let resp = if collapsed { resp } else { resp.on_hover_cursor(egui::CursorIcon::PointingHand) };
-        if resp.clicked() && !collapsed {
-            app.actions.push(Action::Go(Page::Home));
-        }
+        ui.allocate_exact_size(vec2(32.0, 32.0), Sense::hover());
         // Drifts to the rail's edge as it collapses.
         ui.add_space(((ui.available_width() - 48.0) * (1.0 - t)).max(0.0));
         ui.spacing_mut().item_spacing.x = 4.0;
