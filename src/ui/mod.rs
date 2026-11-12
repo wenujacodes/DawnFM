@@ -516,6 +516,10 @@ pub struct App {
     // window
     /// Clicking × hides the window to the tray instead of quitting.
     close_to_tray: bool,
+    /// Settings › Window: a notification when a new song starts while the window isn't focused.
+    pub(super) notify_songs: bool,
+    /// The last song `sync_notify` saw start, so each one is announced once.
+    notified: Option<String>,
     /// Settings › Window: draw with wgpu (Vulkan) from the next start (renderer.rs).
     pub(super) wgpu_renderer: bool,
     /// The app icon (`appicon::ALL` id) shown on the window and in the tray.
@@ -674,6 +678,8 @@ impl App {
             output_devices: Vec::new(),
             updater: None,
             close_to_tray: get("close_to_tray").is_some_and(|v| v == "1"),
+            notify_songs: get("notify_songs").is_some_and(|v| v == "1"),
+            notified: None,
             wgpu_renderer,
             app_icon,
             tray: None,
@@ -1202,6 +1208,7 @@ impl eframe::App for App {
         self.sync_discord();
         self.sync_lastfm();
         self.sync_dock();
+        self.sync_notify(ctx);
         self.sync_server_queue(ctx, now);
         self.tick_sleep(ctx);
         self.tick_updates(ctx, now);
@@ -1471,6 +1478,7 @@ impl eframe::App for App {
             self.good_window = Some(w);
         }
         storage.set_string("close_to_tray", b(self.close_to_tray));
+        storage.set_string("notify_songs", b(self.notify_songs));
         storage.set_string("sidebar_collapsed", b(self.sidebar_collapsed));
         storage.set_string("lyrics_drawer", b(self.lyrics_drawer));
         // The sidebar's playlist order, completed with any playlist that appeared since

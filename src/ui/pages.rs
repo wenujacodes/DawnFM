@@ -1566,6 +1566,10 @@ fn settings_window(app: &mut App, ui: &mut Ui) {
             toggle(ui, &mut app.close_to_tray, "Close to tray");
         });
         divider(ui);
+        setting_row(ui, "Notify on song change", Some("Show a notification with the song and artist when a new song starts while the window isn't in front."), |ui| {
+            toggle(ui, &mut app.notify_songs, "Notify on song change");
+        });
+        divider(ui);
         setting_row(ui, "Collapse sidebar", Some("Show only icons in the sidebar, for narrow windows. The menu button at its top does the same."), |ui| {
             toggle(ui, &mut app.sidebar_collapsed, "Collapse sidebar");
         });

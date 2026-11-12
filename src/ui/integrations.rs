@@ -108,6 +108,20 @@ impl App {
         }
     }
 
+    /// "Notify on song change": when a new song starts and the window isn't focused,
+    /// post "Title — Artist".
+    pub(super) fn sync_notify(&mut self, ctx: &egui::Context) {
+        let Some(t) = self.playing_track().filter(|_| self.playing() && !self.buffering) else { return };
+        if self.notified.as_deref() == Some(t.id.as_str()) {
+            return;
+        }
+        let text = crate::notify::text(&t.title, &t.artist_line());
+        self.notified = Some(t.id.clone());
+        if self.notify_songs && !ctx.input(|i| i.focused) {
+            crate::notify::post(text);
+        }
+    }
+
     pub(super) fn lastfm_sign_in(&mut self) {
         if self.lastfm_busy.swap(true, Ordering::Relaxed) {
             return;
