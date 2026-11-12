@@ -11,6 +11,8 @@ use serde::Deserialize;
 
 /// Id of the built-in look (the app's own design, not a Better Lyrics theme).
 pub const DEFAULT_ID: &str = "ytm-rs";
+/// The built-in look's accent: a warm red.
+pub const DEFAULT_ACCENT: &str = "#f2364d";
 
 #[derive(Clone, Copy, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -363,12 +365,32 @@ pub struct Preset {
 }
 
 impl Preset {
+    /// The app's own look: near-black pages with a soft tint from the playing cover,
+    /// a red accent, a floating sidebar and bold lyrics.
     fn builtin() -> Self {
         Self {
             id: DEFAULT_ID.into(),
             name: "BitChord".into(),
-            blurb: "The app's own look: animated album-art background, left-aligned karaoke lyrics.".into(),
-            accent: "cover".into(),
+            creators: vec!["wenujacodes".into()],
+            blurb: "The app's own look: near-black pages tinted by the album art, a red accent, a floating sidebar and bold lyrics.".into(),
+            accent: DEFAULT_ACCENT.into(),
+            background: Background { solid: "#0b090b".into(), page_dim: 0.45, ..Default::default() },
+            lyrics: LyricStyle { weight: Weight::Bold, size: 1.15, inactive_alpha: 0.3, ..Default::default() },
+            cover: CoverStyle { radius: 10.0, ..Default::default() },
+            chrome: Chrome { glass: 0.9, radius: 10.0, player_bar: PlayerBar::Docked },
+            app: AppStyle {
+                page_bg: PageBg::Accent,
+                sidebar: SidebarStyle::Floating,
+                sidebar_alpha: 0.35,
+                bar_alpha: 0.8,
+                nav: NavStyle::Accent,
+                chip: ChipStyle::Accent,
+                card_radius: 8.0,
+                thumb_radius: 4.0,
+                panel_radius: 10.0,
+                text_dim: "#a9a3aa".into(),
+                ..Default::default()
+            },
             ..Default::default()
         }
     }

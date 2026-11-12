@@ -7,7 +7,7 @@ use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId};
 // ------------------------------------------------------------------ colours
 
 /// Base surface under the animated background (seen while it fades in).
-const BG: Color32 = Color32::from_rgb(12, 10, 14);
+const BG: Color32 = Color32::from_rgb(11, 9, 11);
 const TEXT: Color32 = Color32::from_rgb(242, 240, 245);
 const TEXT_DIM: Color32 = Color32::from_rgb(178, 172, 186);
 const TEXT_FAINT: Color32 = Color32::from_rgb(130, 124, 140);
@@ -16,8 +16,8 @@ const BG_LIGHT: Color32 = Color32::from_rgb(246, 244, 248);
 const TEXT_LIGHT: Color32 = Color32::from_rgb(22, 20, 26);
 const TEXT_DIM_LIGHT: Color32 = Color32::from_rgb(86, 82, 94);
 const TEXT_FAINT_LIGHT: Color32 = Color32::from_rgb(124, 118, 132);
-/// Default accent until a cover provides one (BitChord pink).
-pub const RED: Color32 = Color32::from_rgb(0xFA, 0x58, 0x6A);
+/// Default accent until a cover provides one (the built-in look's red).
+pub const RED: Color32 = Color32::from_rgb(0xF2, 0x36, 0x4D);
 
 /// Light or dark, as the app picked it for what's being drawn (see `set_mode`): the
 /// colours below follow it. Now playing always draws dark, over the album art.
