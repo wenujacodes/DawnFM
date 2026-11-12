@@ -1,16 +1,10 @@
 //! Automatic updates from GitHub releases.
 //!
-//! The installed app (Inno Setup, per-user) checks the latest release at startup and
-//! every few hours, downloads a newer installer in the background, and runs it
-//! silently when the app closes, or right away when the user picks "Restart to
-//! update". The portable build (a `portable.txt` beside the exe) downloads the new
-//! portable zip instead and swaps the exe in place as it closes. On Linux, a copy
-//! put in place by `install.sh` (an `install.txt` beside the binary) downloads the new
-//! tarball and renames the new binary over itself as it closes. On macOS, the copy
-//! installed from the disk image downloads the new one and puts the app from it in
-//! place of its own as it closes. Every platform has a portable build too (a
-//! `portable.txt` marker; inside the app bundle on macOS), which updates from the
-//! portable download. Dev builds never update themselves.
+//! The app checks the latest release of wenujacodes/BitChord-macOS at startup and
+//! every few hours. A copy installed from the disk image downloads the new `.dmg` and
+//! puts the app from it in place of its own as it closes, or right away when the user
+//! picks "Restart to update". The portable build (a `portable.txt` inside the app
+//! bundle) downloads the new portable zip instead. Dev builds never update themselves.
 //!
 //! Release notes (the release's Markdown body) are kept per version: the one a check
 //! finds, and any other on request ([`Updater::notes`]), for the update dialog, the
@@ -23,10 +17,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const LATEST: &str = "https://api.github.com/repos/grapedjuice/ytm-rs/releases/latest";
-const ALL_RELEASES: &str = "https://api.github.com/repos/grapedjuice/ytm-rs/releases";
-const BY_TAG: &str = "https://api.github.com/repos/grapedjuice/ytm-rs/releases/tags/v";
-pub const RELEASES: &str = "https://github.com/grapedjuice/ytm-rs/releases";
+const LATEST: &str = "https://api.github.com/repos/wenujacodes/BitChord-macOS/releases/latest";
+const ALL_RELEASES: &str = "https://api.github.com/repos/wenujacodes/BitChord-macOS/releases";
+const BY_TAG: &str = "https://api.github.com/repos/wenujacodes/BitChord-macOS/releases/tags/v";
+pub const RELEASES: &str = "https://github.com/wenujacodes/BitChord-macOS/releases";
+/// The app bundle in a release download (made by `macos/bundle.sh`), and its binary.
+const APP: &str = "bitchord.app";
+const BIN_IN_APP: &str = "Contents/MacOS/bitchord";
 
 /// Release notes by version: `None` while fetching or when there are none.
 type Notes = Arc<Mutex<std::collections::HashMap<String, Option<String>>>>;
@@ -37,7 +34,7 @@ pub enum State {
     Checking,
     UpToDate,
     Downloading { version: String, percent: u8 },
-    /// `installer` is the setup exe, or for the portable build the new ytm-rs.exe.
+    /// `installer` is the new app's binary, inside its unpacked bundle.
     Ready { version: String, installer: PathBuf },
     Failed(String),
 }
@@ -66,16 +63,15 @@ pub fn installed() -> bool {
     bundle_of(&exe).is_some() && portable_dir().is_none()
 }
 
-/// The `.app` bundle a binary is in (`X.app/Contents/MacOS/ytm-rs`).
+/// The `.app` bundle a binary is in (`X.app/Contents/MacOS/bitchord`).
 fn bundle_of(exe: &Path) -> Option<&Path> {
     exe.ancestors().nth(3).filter(|a| a.extension().is_some_and(|x| x == "app"))
 }
 
-/// The release asset this copy updates from.
+/// The release asset this copy updates from, as the release workflow names it.
 fn asset_name(version: &str) -> String {
-    let portable = portable_dir().is_some();
-    let arch = std::env::consts::ARCH;
-    if portable { format!("ytm-rs-portable-{version}-macos-{arch}.zip") } else { format!("ytm-rs-setup-{version}-macos-{arch}.dmg") }
+    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    if portable_dir().is_some() { format!("BitChord-{version}-macos-{arch}-portable.zip") } else { format!("BitChord-{version}-macos-{arch}.dmg") }
 }
 
 /// The portable build's folder: the download ships a `portable.txt` beside the exe
@@ -371,9 +367,9 @@ fn open_dmg(dmg: &Path, dir: &Path) -> anyhow::Result<PathBuf> {
     std::fs::create_dir_all(&mnt)?;
     let attached = std::process::Command::new("hdiutil").args(["attach", "-nobrowse", "-readonly", "-noautoopen", "-quiet", "-mountpoint"]).arg(&mnt).arg(dmg).status()?;
     anyhow::ensure!(attached.success(), "couldn't open {}", dmg.display());
-    let copied = std::process::Command::new("ditto").arg(mnt.join("ytm-rs.app")).arg(dir.join("ytm-rs.app")).status();
+    let copied = std::process::Command::new("ditto").arg(mnt.join(APP)).arg(dir.join(APP)).status();
     let _ = std::process::Command::new("hdiutil").args(["detach", "-quiet"]).arg(&mnt).status();
-    let exe = dir.join("ytm-rs.app/Contents/MacOS/ytm-rs");
+    let exe = dir.join(APP).join(BIN_IN_APP);
     anyhow::ensure!(copied.is_ok_and(|s| s.success()) && exe.exists(), "couldn't copy the app out of {}", dmg.display());
     Ok(exe)
 }
@@ -384,12 +380,11 @@ fn unzip_exe(zip: &Path, dir: &Path) -> anyhow::Result<PathBuf> {
     let _ = std::fs::remove_dir_all(dir);
     std::fs::create_dir_all(dir)?;
     let status = std::process::Command::new("tar").arg("-xf").arg(zip).arg("-C").arg(dir).status()?;
-    // Everything is in one top-level folder: the binary or the app bundle.
-    let exe = std::fs::read_dir(dir)?
-        .flatten()
-        .flat_map(|e| [e.path().join("ytm-rs"), e.path().join("ytm-rs.app/Contents/MacOS/ytm-rs")])
+    // The zip holds the app bundle, at the top or in one folder.
+    let exe = std::iter::once(dir.join(APP).join(BIN_IN_APP))
+        .chain(std::fs::read_dir(dir)?.flatten().map(|e| e.path().join(APP).join(BIN_IN_APP)))
         .find(|p| p.is_file())
-        .unwrap_or_else(|| dir.join("ytm-rs"));
+        .unwrap_or_else(|| dir.join(APP).join(BIN_IN_APP));
     anyhow::ensure!(status.success() && exe.exists(), "couldn't unpack {}", zip.display());
     Ok(exe)
 }
@@ -419,5 +414,30 @@ mod tests {
         assert!(!newer("v0.2.7", "0.2.7"));
         assert!(!newer("v0.2.6", "0.2.7"));
         assert!(!newer("", "0.2.7"));
+    }
+
+    /// A fake bundle packed the way the release workflow packs it (`ditto` zip and
+    /// `hdiutil` disk image), unpacked the way an update does.
+    #[test]
+    fn finds_the_app_in_release_downloads() {
+        let root = std::env::temp_dir().join(format!("bitchord-update-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let src = root.join("src");
+        let bin = src.join(super::APP).join(super::BIN_IN_APP);
+        std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+        std::fs::write(&bin, b"#!/bin/sh\n").unwrap();
+        let run = |cmd: &mut std::process::Command| assert!(cmd.status().unwrap().success());
+
+        let zip = root.join("app.zip");
+        run(std::process::Command::new("ditto").args(["-c", "-k", "--keepParent"]).arg(src.join(super::APP)).arg(&zip));
+        let exe = super::unzip_exe(&zip, &root.join("from-zip")).unwrap();
+        assert!(exe.ends_with(format!("{}/{}", super::APP, super::BIN_IN_APP)), "{}", exe.display());
+
+        let dmg = root.join("app.dmg");
+        run(std::process::Command::new("hdiutil").args(["create", "-quiet", "-volname", "BitChord", "-format", "UDZO", "-srcfolder"]).arg(&src).arg(&dmg));
+        let exe = super::open_dmg(&dmg, &root.join("from-dmg")).unwrap();
+        assert!(exe.is_file(), "{}", exe.display());
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

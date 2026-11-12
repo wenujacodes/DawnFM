@@ -21,7 +21,7 @@ jobs:
             arch: x64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -39,21 +39,25 @@ jobs:
       - name: Build
         run: cargo build --locked --release
 
-      - name: Make the app bundle
-        run: sh macos/bundle.sh target/release/bitchord "${{ steps.version.outputs.value }}" out
+      - name: Make the app bundles
+        run: |
+          sh macos/bundle.sh target/release/bitchord "${{ steps.version.outputs.value }}" out
+          sh macos/bundle.sh target/release/bitchord "${{ steps.version.outputs.value }}" out-portable portable
 
+      # The app's updater looks for these exact names (asset_name in src/update.rs).
       - name: Package .dmg and .zip
         run: |
           v="${{ steps.version.outputs.value }}"
           name="BitChord-$v-macos-${{ matrix.arch }}"
           mkdir -p dist dmg
           ditto -c -k --keepParent out/bitchord.app "dist/$name.zip"
+          ditto -c -k --keepParent out-portable/bitchord.app "dist/$name-portable.zip"
           cp -R out/bitchord.app dmg/
           ln -s /Applications dmg/Applications
           hdiutil create -volname "BitChord" -srcfolder dmg -ov -format UDZO "dist/$name.dmg"
           ls -lh dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}
           path: dist/*
@@ -63,7 +67,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -76,4 +80,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "BitChord ${GITHUB_REF_NAME#v}" \
             --generate-notes \
-            --notes "The app is signed ad hoc, so macOS asks before the first launch: right-click bitchord.app and choose Open. Pick arm64 for Apple Silicon Macs and x64 for Intel Macs."
+            --notes "The app is signed ad hoc, so macOS asks before the first launch: right-click bitchord.app and choose Open. Pick arm64 for Apple Silicon Macs and x64 for Intel Macs. The -portable zip keeps its settings in a folder beside the app."
