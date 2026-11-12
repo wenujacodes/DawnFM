@@ -22,6 +22,7 @@ mod playback;
 mod queue;
 mod responses;
 mod shell;
+mod sleep;
 mod titlebar;
 pub use titlebar::custom as custom_titlebar;
 mod transfer;
@@ -432,6 +433,8 @@ pub struct App {
     pending_mix: Option<MixFrom>,
     /// The song an Automix handoff came from, shown until the next one is louder.
     mix_from: Option<MixFrom>,
+    /// Now playing's sleep timer; off at every launch.
+    sleep: sleep::Sleep,
     /// SponsorBlock segments for a video, and when one was last skipped.
     segments: Option<(String, Vec<crate::sponsorblock::Segment>)>,
     segment_skipped: f64,
@@ -735,6 +738,7 @@ impl App {
             handoff: false,
             pending_mix: None,
             mix_from: None,
+            sleep: sleep::Sleep::Off,
             crossfade_secs: get("crossfade_secs").and_then(|v| v.parse().ok()).unwrap_or(5).clamp(1, CROSSFADE_MAX),
             segments: None,
             segment_skipped: f64::NEG_INFINITY,
@@ -1198,6 +1202,7 @@ impl eframe::App for App {
         self.sync_discord();
         self.sync_lastfm();
         self.sync_server_queue(ctx, now);
+        self.tick_sleep(ctx);
         self.tick_updates(ctx, now);
         let np = widgets::NowPlaying {
             song: self.current_id().map(str::to_owned),

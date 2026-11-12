@@ -800,6 +800,8 @@ fn options_menu(app: &mut App, ui: &mut Ui, rect: Rect, track: &crate::model::Tr
         if widgets::menu_action(ui, Some(icon::RADIO), "Start radio") {
             app.actions.push(Action::Radio(track.clone()));
         }
+        menu_divider(ui);
+        sleep_options(app, ui);
         // Quality toggle at the bottom: revert when hi-res is playing, upgrade when not.
         let hires_playing = app.audio_info.as_ref().is_some_and(|(_, i)| i.lossless() || i.atmos);
         if hires_playing || !app.hires_sources.is_empty() {
@@ -854,6 +856,75 @@ fn lyric_options(app: &mut App, ui: &mut Ui) {
         log::info!("lyrics: showing {} ({}/{}) by choice", p.key(), available.iter().position(|x| *x == p).map_or(0, |i| i + 1), n);
         app.lyric_view.reset();
     }
+}
+
+/// Sleep timer: a row showing what's set (and the time left), opening in place onto
+/// the lengths to pick from.
+fn sleep_options(app: &mut App, ui: &mut Ui) {
+    use super::sleep::{MINUTES, Sleep};
+    let now = std::time::Instant::now();
+    let open_id = egui::Id::unique("np-sleep-open");
+    let mut open = ui.data(|d| d.get_temp::<bool>(open_id).unwrap_or(false));
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
+    let resp = named(resp, "Sleep timer").on_hover_cursor(egui::CursorIcon::PointingHand);
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 7.0, theme::glass(0.12));
+    }
+    let color = if resp.hovered() { theme::text() } else { theme::text_dim() };
+    widgets::icon_at(ui, pos2(rect.right() - 19.0, rect.center().y), if open { icon::CHEVRON_UP } else { icon::CHEVRON_DOWN }, 16.0, color);
+    ui.painter().text(pos2(rect.left() + 12.0, rect.center().y), egui::Align2::LEFT_CENTER, "Sleep timer", theme::regular(14.0), theme::text());
+    let on = app.sleep.active();
+    let value = if on { theme::text() } else { theme::text_faint() };
+    ui.painter().text(pos2(rect.right() - 36.0, rect.center().y), egui::Align2::RIGHT_CENTER, app.sleep.label(now), theme::semibold(12.5), value);
+    if matches!(app.sleep, Sleep::At(_)) {
+        // The time left counts down while the menu is up.
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+    }
+    if resp.clicked() {
+        open = !open;
+        ui.data_mut(|d| d.insert_temp(open_id, open));
+    }
+    if !open {
+        return;
+    }
+    let mut pick = None;
+    for m in MINUTES {
+        if sleep_row(ui, &format!("{m} minutes"), false) {
+            pick = Some(Sleep::after(m, now));
+        }
+    }
+    if sleep_row(ui, "End of this song", app.sleep == Sleep::EndOfSong) {
+        pick = Some(Sleep::EndOfSong);
+    }
+    if on && sleep_row(ui, "Turn off timer", false) {
+        pick = Some(Sleep::Off);
+    }
+    if let Some(s) = pick {
+        app.sleep = s;
+        ui.data_mut(|d| d.insert_temp(open_id, false));
+        app.toast(match s {
+            Sleep::Off => "Sleep timer off".to_owned(),
+            Sleep::At(_) => format!("Pausing in {}", s.label(now)),
+            Sleep::EndOfSong => "Pausing at the end of this song".to_owned(),
+        });
+    }
+}
+
+/// One of the sleep timer's choices, indented under its row; picking it closes the menu.
+fn sleep_row(ui: &mut Ui, label: &str, current: bool) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
+    let resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 7.0, theme::glass(0.12));
+    }
+    ui.painter().text(pos2(rect.left() + 24.0, rect.center().y), egui::Align2::LEFT_CENTER, label, theme::regular(13.5), theme::text_dim());
+    if current {
+        widgets::icon_at(ui, pos2(rect.right() - 19.0, rect.center().y), icon::CHECK, 15.0, theme::text());
+    }
+    if resp.clicked() {
+        ui.close();
+    }
+    resp.clicked()
 }
 
 fn menu_caption(ui: &mut Ui, text: &str) {

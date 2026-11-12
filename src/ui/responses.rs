@@ -10,6 +10,7 @@ use crate::backend::{Req, Resp};
 use crate::model::{ShelfKind, Track};
 use crate::ytm::HomePage;
 
+use super::sleep::Sleep;
 use super::{Action, App, Dialog, HomeState, LibTab, MixFrom, Page, PlayingAs, Repeat, dev_var, shuffle};
 
 impl App {
@@ -31,15 +32,20 @@ impl App {
             match ev {
                 AudioEvent::Finished { generation } if generation == self.generation && self.jam.guest() => {}
                 AudioEvent::Finished { generation } if generation == self.generation => {
-                    if self.queue.repeat == Repeat::One {
+                    if self.sleep == Sleep::EndOfSong {
+                        self.sleep_at_song_end();
+                    } else if self.queue.repeat == Repeat::One {
                         self.play_current();
                     } else {
                         self.next();
                     }
                 }
                 AudioEvent::Finished { .. } => {}
-                // Crossfade into the next song; repeat-one and the end of the queue wait for the end.
-                AudioEvent::Ending { generation } if generation == self.generation && !self.jam.guest() && self.queue.repeat != Repeat::One => {
+                // Crossfade into the next song; repeat-one, the end of the queue and a sleep
+                // timer set for this song's end wait for the end.
+                AudioEvent::Ending { generation }
+                    if generation == self.generation && !self.jam.guest() && self.queue.repeat != Repeat::One && self.sleep != Sleep::EndOfSong =>
+                {
                     // Automix: the next song eases in under this one, which keeps the
                     // player until the blend has given the next song the louder half
                     // (see `MixFrom`).
