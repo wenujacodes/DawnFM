@@ -653,8 +653,8 @@ fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
                     RichText::new(format!("{} songs • {} min", tracks.len(), total / 60)).font(theme::regular(13.5)).color(theme::text_faint()),
                 );
             }
-            // Playlists keep their description; albums show none.
-            if let Some(d) = c.description.as_deref().filter(|d| !is_album && !d.trim().is_empty()) {
+            // Playlists keep their description; albums and Liked Music show none.
+            if let Some(d) = c.description.as_deref().filter(|d| !is_album && id != "LM" && !d.trim().is_empty()) {
                 ui.add_space(6.0);
                 let g = widgets::galley_wrapped(ui, d.trim(), theme::regular(13.5), theme::text_dim(), ui.available_width(), 2);
                 ui.label(g);
@@ -1063,19 +1063,13 @@ fn downloads(app: &mut App, ui: &mut Ui, now: f64) {
     let songs = crate::downloads::list();
     ui.add_space(4.0);
     ui.label(
-        RichText::new(format!("{} songs \u{2022} {}", songs.len(), crate::downloads::folder().display()))
+        RichText::new(format!("{} songs", songs.len()))
             .font(theme::regular(13.0))
             .color(theme::text_dim()),
     );
     ui.add_space(12.0);
     if songs.is_empty() {
         ui.label(RichText::new("No downloads yet").font(theme::semibold(16.0)).color(theme::text()));
-        ui.add_space(4.0);
-        ui.label(
-            RichText::new("Right-click a song and choose Download to keep it on this computer, playable offline.")
-                .font(theme::regular(13.0))
-                .color(theme::text_dim()),
-        );
         ui.add_space(10.0);
         if pill(ui, "Open folder", Some(icon::FOLDER_OPEN), false).clicked() {
             crate::downloads::open_folder();
