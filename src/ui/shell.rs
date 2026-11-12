@@ -790,7 +790,7 @@ fn suggestion_text(ui: &Ui, pos: Pos2, text: &str, typed: &str, width: f32) {
 /// BitChord desktop app. Transport on the left, the sleeve with its titles and seek
 /// line in the middle, favourites / lyrics / queue / volume on the right.
 /// Height of the docked player strip.
-pub const DOCKED_H: f32 = 64.0;
+pub const DOCKED_H: f32 = 84.0;
 
 /// Whether the theme docks the player to the window's bottom edge.
 pub fn docked(app: &App) -> bool {
@@ -805,11 +805,13 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     }
     let ctx = ui.ctx().clone();
     let cap = if docked(app) {
-        // Docked: a full-width strip on the window's bottom edge, with a hairline on top.
+        // Docked: the app's own background, no strip of its own. The page fades into it
+        // over the top part, so rows scrolling under the controls don't show through.
         let cap = Rect::from_min_max(pos2(full.left(), full.bottom() - DOCKED_H), full.max);
-        ui.painter().rect_filled(cap, 0.0, app.look().solid());
-        ui.painter().rect_filled(cap, 0.0, theme::glass(0.035));
-        ui.painter().hline(cap.x_range(), cap.top(), egui::Stroke::new(1.0, theme::glass(0.08)));
+        let base = if theme::light() { theme::bg() } else { app.look().solid() };
+        let fade_to = cap.top() + DOCKED_H * 0.35;
+        vgradient(ui.painter(), Rect::from_min_max(cap.min, pos2(cap.right(), fade_to)), Color32::TRANSPARENT, base.gamma_multiply(0.94));
+        ui.painter().rect_filled(Rect::from_min_max(pos2(cap.left(), fade_to), cap.max), 0.0, base.gamma_multiply(0.94));
         cap.shrink2(vec2(12.0, 0.0))
     } else {
         if frosted {
@@ -852,8 +854,8 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     // Docked: the song on the left, the controls in the middle, the rest on the right.
     // Floating: controls, then the song, then the rest.
     let (run_l, cover, text_l, text_r) = if docked(app) {
-        let cover = Rect::from_center_size(pos2(cap.left() + pad + 22.0, cy), Vec2::splat(44.0));
-        let text_l = cover.right() + 12.0;
+        let cover = Rect::from_center_size(pos2(cap.left() + pad + 28.0, cy), Vec2::splat(56.0));
+        let text_l = cover.right() + 14.0;
         let run_l = (cap.center().x - (run_w - 8.0) / 2.0).max(text_l + 120.0).min(right_l - run_w - 8.0);
         (run_l, cover, text_l, run_l - 18.0)
     } else {
@@ -870,8 +872,11 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
 
     // Transport: shuffle | previous · play · next | repeat. The glyphs alone carry the
     // state; no button fills.
+    let dock = docked(app);
+    // Docked: the controls sit under the seek row, as in Music.
+    let ty = if dock { cy + 13.0 } else { cy };
     let tbtn = |ui: &mut Ui, x: f32, key: &str, name: &str| -> egui::Response {
-        let r = Rect::from_center_size(pos2(x, cy), Vec2::splat(28.0));
+        let r = Rect::from_center_size(pos2(x, ty), Vec2::splat(28.0));
         let resp = ui.interact(r, ui.scope_id().with(("bar-t", key)), Sense::click());
         named(resp, name).on_hover_text(name).on_hover_cursor(egui::CursorIcon::PointingHand)
     };
@@ -962,13 +967,20 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         None => status.position_smooth().as_secs_f32(),
     };
     let pos = app.seek_drag.unwrap_or(smooth).min(total.max(0.0));
-    let seek_hit = Rect::from_min_max(pos2(text_l, cap.bottom() - 13.0), pos2(text_r, cap.bottom() - 2.0));
+    // Docked: a centred seek row above the controls, its times always beside it.
+    // Floating: a thin line under the sleeve and titles.
+    let mid_x = run_l + (run_w - 8.0) / 2.0;
+    let (sx0, sx1, sy) = if dock {
+        let half = (right_l - 70.0 - mid_x).min(mid_x - text_l - 150.0).clamp(60.0, 210.0);
+        (mid_x - half, mid_x + half, cy - 14.0)
+    } else {
+        (text_l, text_r, cap.bottom() - 7.0)
+    };
+    let seek_hit = Rect::from_min_max(pos2(sx0, sy - 6.0), pos2(sx1, sy + 5.0));
     let sresp = ui.interact(seek_hit, ui.scope_id().with("bar-seek"), if held { Sense::hover() } else { Sense::click_and_drag() });
     let sresp = if total > 0.0 && !held { sresp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { sresp };
     sresp.widget_info(|| egui::WidgetInfo::slider(total > 0.0 && !held, pos as f64, "Seek"));
     let focus = theme::anim_bool(&ctx, "bar-seek-h", total > 0.0 && !held && (sresp.hovered() || sresp.dragged()), 0.15);
-    let (sx0, sx1) = (text_l, text_r);
-    let sy = cap.bottom() - 7.0;
     let thick = 2.0 + 2.0 * focus;
     let line_r = Rect::from_min_max(pos2(sx0, sy - thick / 2.0), pos2(sx1, sy + thick / 2.0));
     ui.painter().rect_filled(line_r, thick / 2.0, theme::glass(0.18));
@@ -1016,8 +1028,8 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         Some(t) => (t.title.clone(), ()),
         None => ("Dawn FM".to_owned(), ()),
     };
-    let fade = 1.0 - 0.7 * focus;
-    let afade = 1.0 - focus;
+    // Floating: the titles give way to the times while the seek line has the pointer.
+    let (fade, afade) = if dock { (1.0, 1.0) } else { (1.0 - 0.7 * focus, 1.0 - focus) };
     let tr = text_at(ui, pos2(text_l, cy - 15.0), &title, theme::semibold(13.0), theme::with_alpha(theme::text(), fade), text_w);
     if let Some(t) = &track {
         let tre = ui.interact(tr, ui.scope_id().with("bar-title"), Sense::click());
@@ -1046,7 +1058,13 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
             }
         }
     }
-    if focus > 0.0 && total > 0.0 {
+    if dock && total > 0.0 {
+        let g = widgets::galley(ui, &fmt_time(pos as u32), theme::semibold(11.5), theme::text_dim(), 80.0);
+        ui.painter().galley(pos2(sx0 - 10.0 - g.size().x, sy - g.size().y / 2.0), g, theme::text_dim());
+        let left = fmt_time((total - pos).max(0.0) as u32);
+        let g = widgets::galley(ui, &format!("-{left}"), theme::semibold(11.5), theme::text_dim(), 80.0);
+        ui.painter().galley(pos2(sx1 + 10.0, sy - g.size().y / 2.0), g, theme::text_dim());
+    } else if focus > 0.0 && total > 0.0 {
         let col = theme::with_alpha(theme::text(), focus);
         let g = widgets::galley(ui, &fmt_time(pos as u32), theme::semibold(11.5), theme::text(), 80.0);
         ui.painter().galley(pos2(text_l, cy + 2.0), g, col);
