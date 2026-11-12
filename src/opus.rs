@@ -304,4 +304,29 @@ mod tests {
             println!("{id} at {at:?}: player {player:?}, decoder ready {ready:?}, first sample {first:?}");
         }
     }
+
+    /// The next song's `/player` call after a client sat idle a while (browsing between
+    /// clicks), when idle connections are dropped after 30 s and after 120 s.
+    /// `cargo test --release -- --ignored player_after_idle --nocapture`
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn player_after_idle() {
+        let api = crate::ytmapi::Api::new(&std::env::temp_dir().join("ytm-rs-opus-test"));
+        let vd = api.visitor_data(false).await.unwrap();
+        let client = |pool| reqwest::Client::builder().pool_idle_timeout(Duration::from_secs(pool)).build().unwrap();
+        let (short, long) = (client(30), client(120));
+        for idle in [45u64, 90, 45] {
+            for http in [&short, &long] {
+                crate::innertube::audio_stream(http, "a4O-abCXsfA", &vd, true).await.unwrap();
+            }
+            tokio::time::sleep(Duration::from_secs(idle)).await;
+            let mut took = Vec::new();
+            for http in [&short, &long] {
+                let t = Instant::now();
+                crate::innertube::audio_stream(http, "zuO2fClon98", &vd, true).await.unwrap();
+                took.push(t.elapsed());
+            }
+            println!("after {idle} s idle: /player {:?} (30 s pool), {:?} (120 s pool)", took[0], took[1]);
+        }
+    }
 }
