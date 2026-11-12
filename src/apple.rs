@@ -89,10 +89,10 @@ async fn get(http: &reqwest::Client, url: &str, bearer: Option<&str>) -> anyhow:
 /// load the web player, find the JS bundle it pulls in, take the token out of it.
 async fn token(http: &reqwest::Client) -> Option<String> {
     let now = now_secs();
-    if let Some(t) = TOKEN.lock().ok().and_then(|t| t.as_ref().map(|t| (t.jwt.clone(), t.expires))) {
-        if now < t.1 - TOKEN_TTL_MARGIN {
-            return Some(t.0);
-        }
+    if let Some(t) = TOKEN.lock().ok().and_then(|t| t.as_ref().map(|t| (t.jwt.clone(), t.expires)))
+        && now < t.1 - TOKEN_TTL_MARGIN
+    {
+        return Some(t.0);
     }
     if RETRY_AFTER.lock().ok().and_then(|r| *r).is_some_and(|at| Instant::now() < at) {
         return None;
@@ -206,10 +206,10 @@ fn reject(jwt: &str) {
     if let Ok(mut set) = REJECTED.lock() {
         set.insert(jwt.to_owned());
     }
-    if let Ok(mut slot) = TOKEN.lock() {
-        if slot.as_ref().is_some_and(|t| t.jwt == jwt) {
-            *slot = None;
-        }
+    if let Ok(mut slot) = TOKEN.lock()
+        && slot.as_ref().is_some_and(|t| t.jwt == jwt)
+    {
+        *slot = None;
     }
 }
 
@@ -438,7 +438,7 @@ fn artist_logo(html: &str) -> Option<LogoSrc> {
     let template = url_after_key(block, "{", "url")?.replace("\\/", "/");
     let (w, h) = (number_after(block, "\"width\"")?, number_after(block, "\"height\"")?);
     // Only a real template can be resized; a plain URL is taken as-is.
-    (w > 0 && h > 0 && template.contains("{w}")).then(|| LogoSrc { template, w, h })
+    (w > 0 && h > 0 && template.contains("{w}")).then_some(LogoSrc { template, w, h })
 }
 
 /// The number after `"key":` in `s`.

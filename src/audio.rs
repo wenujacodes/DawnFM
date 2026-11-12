@@ -278,7 +278,7 @@ impl MixFx {
         let mut result = input;
         let mut history = input;
         if let Some((x, outgoing)) = blend {
-            if c == 0 && self.ticks % 32 == 0 {
+            if c == 0 && self.ticks.is_multiple_of(32) {
                 let handoff = mix_handoff(x);
                 self.bass = if outgoing { 1.0 - 0.85 * smoothstep((x - 0.35) / 0.3) } else { 0.15 + 0.85 * smoothstep((x - 0.58) / 0.25) };
                 self.treble = if outgoing { 1.0 - 0.5 * handoff } else { 0.7 + 0.3 * handoff };

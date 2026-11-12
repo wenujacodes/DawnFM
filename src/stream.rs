@@ -587,8 +587,7 @@ pub fn decoder(shared: Arc<Shared>, seekable: bool) -> anyhow::Result<TrackDecod
                 .with_hint("m4a");
             Ok(TrackDecoder::Rodio(builder.build()?))
         }
-        Format::File { ref hint, ref mime } => {
-            let hint = *hint;
+        Format::File { hint, ref mime } => {
             let mime = mime.clone();
             let builder = rodio::Decoder::builder()
                 .with_data(StreamReader::new(shared))

@@ -955,7 +955,7 @@ impl Backend {
         let generation = self.audio.status.wanted_gen.load(Ordering::Relaxed);
         // Looked up now, so the play doesn't wait for it.
         let song = self.song_version(&video_id, song_of.as_ref(), PREFETCH_SONG_WAIT).await;
-        let meta = song.clone().or_else(|| song_of.clone()).or_else(|| track);
+        let meta = song.clone().or_else(|| song_of.clone()).or(track);
         let video_id = song.map_or(video_id, |s| s.id);
         // Let the playing song finish downloading first: it gets the whole bandwidth.
         let playing = self.current.lock_unpoisoned().as_ref().map(|(_, s)| s.clone());

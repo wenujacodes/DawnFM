@@ -98,7 +98,7 @@ pub async fn lookup(http: &reqwest::Client, endpoint: &str, name: &str) -> Optio
     // A 960 px Wikimedia raster is more than the header ever draws: cap it so a
     // handful of visited artists can't hold a page's worth of textures.
     let img = if img.width() > 720 {
-        let h = (u32::from(img.height()) * 720 / img.width()).max(1) as u32;
+        let h = (img.height() * 720 / img.width()).max(1) as u32;
         image::imageops::resize(&img, 720, h, image::imageops::FilterType::Lanczos3)
     } else {
         img

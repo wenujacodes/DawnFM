@@ -550,7 +550,7 @@ fn number_before(text: &str, unit: &str) -> Option<f64> {
 
 fn rank(mut candidates: Vec<Candidate>, title: &str, artist: &str, duration: Option<u32>, prefer_atmos: bool) -> Vec<Candidate> {
     let mut scored: Vec<(Candidate, i32)> = candidates.drain(..).filter_map(|c| score(&c, title, artist, duration, prefer_atmos).map(|s| (c, s))).collect();
-    scored.sort_by(|a, b| b.1.cmp(&a.1));
+    scored.sort_by_key(|e| std::cmp::Reverse(e.1));
     scored.into_iter().map(|(c, _)| c).collect()
 }
 

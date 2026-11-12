@@ -391,7 +391,6 @@ impl Preset {
                 text_dim: "#a9a3aa".into(),
                 ..Default::default()
             },
-            ..Default::default()
         }
     }
 

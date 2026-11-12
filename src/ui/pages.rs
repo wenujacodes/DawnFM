@@ -685,10 +685,10 @@ fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
                     {
                         acts.push(Action::SaveCollection(save_id, !saved));
                     }
-                    if app.logged_in && !auto && !tracks.is_empty() {
-                        if widgets::menu_action(ui, Some(icon::LIST_CHECKS), if selecting { "Done selecting" } else { "Select" }) {
-                            if selecting { stop_select = true } else { start_select = true }
-                        }
+                    if app.logged_in && !auto && !tracks.is_empty()
+                        && widgets::menu_action(ui, Some(icon::LIST_CHECKS), if selecting { "Done selecting" } else { "Select" })
+                    {
+                        if selecting { stop_select = true } else { start_select = true }
                     }
                     if app.logged_in && !auto && (save_id.is_some() || owned) {
                         ui.separator();

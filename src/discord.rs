@@ -36,7 +36,7 @@ const APP_SUBPATHS: [&str; 7] = [
 ];
 
 fn socket_exists() -> bool {
-    ENV_KEYS.iter().filter_map(|k| std::env::var_os(k)).map(std::path::PathBuf::from).filter(|b| b.is_dir()).any(|base| {
+    ENV_KEYS.iter().filter_map(std::env::var_os).map(std::path::PathBuf::from).filter(|b| b.is_dir()).any(|base| {
         (0..10).any(|i| APP_SUBPATHS.iter().any(|sub| base.join(sub).join(format!("discord-ipc-{i}")).exists()))
     })
 }

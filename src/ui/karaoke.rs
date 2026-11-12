@@ -2320,7 +2320,7 @@ fn paint_instrumental(painter: &egui::Painter, cfg: &Cfg, b: &Block, xf: &Xf, t:
             painter.circle_filled(c, r, theme::with_alpha(cfg.active, lit * alpha));
         }
     }
-    (into >= 0.0 && into <= GAP_ENTER) || t < b.start + step * GAP_DOTS as f64 || (t >= exit_start && t < until)
+    (0.0..=GAP_ENTER).contains(&into) || t < b.start + step * GAP_DOTS as f64 || (t >= exit_start && t < until)
 }
 
 /// Dev hook: YTM_LYR_OFF=glow,blur,view leaves those parts out (memory breakdowns).

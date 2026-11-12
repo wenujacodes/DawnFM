@@ -425,11 +425,11 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     if let Some(id) = hide {
         app.hidden_playlists.insert(id);
     }
-    if let Some((dragged, target)) = reorder {
-        if let (Some(from), Some(to)) = (app.playlist_order.iter().position(|x| x == &dragged), app.playlist_order.iter().position(|x| x == &target)) {
-            let id = app.playlist_order.remove(from);
-            app.playlist_order.insert(to.min(app.playlist_order.len()), id);
-        }
+    if let Some((dragged, target)) = reorder
+        && let (Some(from), Some(to)) = (app.playlist_order.iter().position(|x| x == &dragged), app.playlist_order.iter().position(|x| x == &target))
+    {
+        let id = app.playlist_order.remove(from);
+        app.playlist_order.insert(to.min(app.playlist_order.len()), id);
     }
     let ready = app.updater.as_ref().and_then(|u| match u.state() {
         crate::update::State::Ready { version, .. } => Some(version),

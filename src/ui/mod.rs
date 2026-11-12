@@ -1078,7 +1078,7 @@ impl App {
         // One decoder per release. The strip and the player ask for different sizes, and
         // replacing it per caller would restart the clip every frame and never show a
         // frame: a bigger view takes over only when it needs a wider decode.
-        let stale = self.apple_motion.get(&key).map_or(true, |v| v.width < max_width);
+        let stale = self.apple_motion.get(&key).is_none_or(|v| v.width < max_width);
         if stale {
             if self.apple_motion.len() >= 8 {
                 self.apple_motion.clear();
