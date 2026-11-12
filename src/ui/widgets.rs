@@ -452,7 +452,7 @@ fn dissolve(ui: &Ui, site: egui::Id, url: &str, uv: Rect, ready: bool, paint: &m
         if now - s.swap_at < 3.0 {
             paint(&s.url, s.uv, 1.0);
             ctx.data_mut(|d| d.insert_temp(key, s));
-            ctx.request_repaint();
+            super::animate(ctx);
             return;
         }
         // A cover that never arrives: its placeholder beats freezing the old one.
@@ -468,7 +468,7 @@ fn dissolve(ui: &Ui, site: egui::Id, url: &str, uv: Rect, ready: bool, paint: &m
     if p >= 1.0 {
         s = Shown { url: url.to_owned(), uv, to: None, swap_at: now, fade_from: None };
     } else {
-        ctx.request_repaint();
+        super::animate(ctx);
     }
     ctx.data_mut(|d| d.insert_temp(key, s));
 }
@@ -1054,7 +1054,7 @@ pub fn paint_remote(ui: &Ui, url: &str, rect: Rect, radius: f32, uv: Rect, tint:
                 _ => 1.0,
             };
             if a < 1.0 {
-                ctx.request_repaint();
+                super::animate(ctx);
             }
             egui::Image::from_texture(texture).uv(uv).corner_radius(CornerRadius::same(radius as u8)).tint(tint.gamma_multiply(theme::ease_out(a))).paint_at(ui, rect);
         }

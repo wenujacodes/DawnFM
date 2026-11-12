@@ -44,7 +44,7 @@ pub fn page(app: &mut App, ui: &mut Ui, now: f64) {
     let t = theme::ease_out(((now - app.page_changed) / 0.32) as f32);
     if t < 1.0 {
         // The fade-in finishes even when nothing else is drawing frames.
-        ui.ctx().request_repaint();
+        super::animate(ui.ctx());
     }
     ui.set_opacity(0.15 + 0.85 * t);
     let page = app.page.clone();

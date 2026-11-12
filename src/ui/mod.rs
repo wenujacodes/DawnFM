@@ -1218,16 +1218,19 @@ impl eframe::App for App {
         // lyrics ask for every frame while they animate (the karaoke sweep must be
         // smooth). Each egui frame re-lays-out the UI, so frame rate is the main CPU cost.
         let playing = self.playing();
-        if self.window_hidden {
-            // In the tray or minimized: nothing to draw, only the player bookkeeping.
+        let (covered, focused) = ctx.input(|i| (i.viewport().occluded == Some(true), i.viewport().focused != Some(false)));
+        if self.window_hidden || covered {
+            // In the tray, minimized or covered: nothing to draw, only the player
+            // bookkeeping. Track changes and media keys wake the loop themselves.
             if playing || self.buffering {
-                ctx.request_repaint_after(Duration::from_millis(250));
+                ctx.request_repaint_after(Duration::from_secs(1));
             }
         } else if self.np_open && playing && !self.mini.busy() {
             ctx.request_repaint_after(Duration::from_millis(33));
         } else if playing && widgets::equalizer_shown(ctx) {
-            // The playing row's bars need a steady, full rate to read as smooth.
-            ctx.request_repaint_after(Duration::from_millis(16));
+            // The playing row's bars need a steady, full rate to read as smooth; 30 fps
+            // behind other windows.
+            ctx.request_repaint_after(Duration::from_millis(if focused { 16 } else { 33 }));
         } else if playing && self.anim_bg && shell::pages_bg_moves(self.look()) {
             ctx.request_repaint_after(Duration::from_millis(66));
         } else if playing || self.buffering {
@@ -1653,6 +1656,17 @@ fn smooth_wheel(app: &mut App, ctx: &egui::Context, raw: &mut egui::RawInput) {
         source: egui::MouseWheelSource::Wheel,
     });
     ctx.request_repaint();
+}
+
+/// Ask for the next frame of an animation: every frame while the window has focus,
+/// ~30 fps behind other windows. Hidden or covered, eframe runs no ui pass, so the
+/// pacing in `logic` decides alone.
+pub fn animate(ctx: &egui::Context) {
+    if ctx.input(|i| i.viewport().focused == Some(false)) {
+        ctx.request_repaint_after(Duration::from_millis(33));
+    } else {
+        ctx.request_repaint();
+    }
 }
 
 /// Fisher-Yates with a clock-seeded xorshift; shuffling doesn't need a real RNG crate.

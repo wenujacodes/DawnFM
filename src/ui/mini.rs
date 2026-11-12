@@ -268,7 +268,7 @@ impl Mini {
         if t >= 1.0 {
             return;
         }
-        ctx.request_repaint();
+        super::animate(ctx);
         let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("mini-fade"));
         ctx.layer_painter(layer).rect_filled(ctx.content_rect(), 0.0, base.gamma_multiply(1.0 - theme::ease_out(t)));
     }

@@ -645,7 +645,7 @@ pub fn suggestions(app: &mut App, ctx: &egui::Context) {
                                 icon_at(ui, pos2(r.left() + 20.0, cy), icon::HISTORY, 15.0, theme::text_dim());
                                 suggestion_text(ui, pos2(r.left() + 42.0, cy - 9.0), &term, &app.suggestions.0, r.width() - 88.0);
                             });
-                            ui.ctx().request_repaint();
+                            super::animate(ui.ctx());
                             continue;
                         }
                         let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 40.0), Sense::click());

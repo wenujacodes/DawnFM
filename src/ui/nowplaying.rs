@@ -135,7 +135,7 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     let shown = ui.ctx().animate_bool_with_time(egui::Id::unique("np-panel"), app.np_tab != NpTab::Art, 0.6 * theme::SPEED);
     if shown > 0.0 && shown < 1.0 {
         // Every frame while sliding, not the now-playing view's usual 30 fps.
-        ui.ctx().request_repaint();
+        super::animate(ui.ctx());
     }
     let ppp = ui.ctx().pixels_per_point();
     let p = if panel_tab == NpTab::Lyrics && no_lyrics { 0.0 } else { shown };
@@ -195,7 +195,7 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
         for (tab, key) in [(NpTab::Lyrics, "np-tab-lyrics"), (NpTab::UpNext, "np-tab-upnext")] {
             let w = ui.ctx().animate_bool_with_time(egui::Id::unique(key), panel_tab == tab, 0.45 * theme::SPEED);
             if w > 0.0 && w < 1.0 {
-                ui.ctx().request_repaint();
+                super::animate(ui.ctx());
             }
             let vis = if panel_tab == tab {
                 theme::ease_out((w - 0.35) / 0.65)
@@ -649,7 +649,7 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
         app.actions.push(Action::Seek(s as f32));
     }
     if out.animating {
-        ui.ctx().request_repaint();
+        super::animate(ui.ctx());
     }
     // The extension's `.autoscroll-resume-button` (YouTube Music's rem is 10 px): a frosted
     // pill under the top edge in the lyrics font at 600, 1.75rem; padding .5rem 1rem;
@@ -680,7 +680,7 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
         }
         p.galley_with_override_text_color(at, g, theme::with_alpha(Color32::WHITE, shown));
         if shown < 1.0 {
-            ui.ctx().request_repaint();
+            super::animate(ui.ctx());
         }
         if resp.clicked() {
             app.lyric_view.resume();
