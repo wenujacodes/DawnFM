@@ -1,10 +1,10 @@
 [package]
-name = "bitchord"
+name = "duskfm"
 version = "2.1.0"
 edition = "2024"
 license = "GPL-3.0-only"
-repository = "https://github.com/jackychan4891/BitChord-PC-Continued"
-description = "Native BitChord client"
+repository = "https://github.com/wenujacodes/DuskFM-Releases"
+description = "Dusk FM: a native YouTube Music app for macOS"
 
 [dependencies]
 anyhow = "1.0.104"

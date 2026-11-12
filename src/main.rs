@@ -95,8 +95,8 @@ fn main() -> eframe::Result {
     // taskbar, so automated test runs don't pop up over whatever the user is doing.
     let background = std::env::var_os("YTM_BACKGROUND").is_some();
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("BitChord")
-        .with_app_id("bitchord")
+        .with_title("Dusk FM")
+        .with_app_id("duskfm")
         .with_inner_size(DEFAULT_SIZE)
         .with_min_inner_size(MIN_SIZE)
         // No grey title bar: the content runs to the top edge, under the window buttons.
@@ -130,7 +130,7 @@ fn main() -> eframe::Result {
     };
 
     let run = eframe::run_native(
-        "BitChord",
+        "Dusk FM",
         options,
         Box::new(|cc| {
             let ctx = cc.egui_ctx.clone();
@@ -228,7 +228,7 @@ fn main() -> eframe::Result {
 fn init_logging() {
     let mut builder = env_logger::Builder::from_env(
         // A test build can be made more talkative: YTM_DEFAULT_LOG=warn,bitchord=debug cargo build.
-        env_logger::Env::default().default_filter_or(option_env!("YTM_DEFAULT_LOG").unwrap_or("warn,bitchord=info")),
+        env_logger::Env::default().default_filter_or(option_env!("YTM_DEFAULT_LOG").unwrap_or("warn,duskfm=info")),
     );
     // Dev hook: YTM_LOG=<path> logs there (test runs beside a running copy).
     if let Some(path) = std::env::var_os("YTM_LOG") {
@@ -239,8 +239,8 @@ fn init_logging() {
         let dir = data_dir();
         let _ = std::fs::create_dir_all(&dir);
         // The last run's log too: reopening the app after a problem would otherwise wipe it.
-        let _ = std::fs::rename(dir.join("ytm-rs.log"), dir.join("ytm-rs.prev.log"));
-        if let Ok(file) = std::fs::File::create(dir.join("ytm-rs.log")) {
+        let _ = std::fs::rename(dir.join("duskfm.log"), dir.join("duskfm.prev.log"));
+        if let Ok(file) = std::fs::File::create(dir.join("duskfm.log")) {
             builder.target(env_logger::Target::Pipe(Box::new(file)));
         }
     }

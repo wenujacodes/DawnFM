@@ -1,9 +1,9 @@
 #!/bin/sh
-# Make bitchord.app from a built binary:
-#   macos/bundle.sh target/release/bitchord 0.2.24 out [portable]
+# Make "Dusk FM.app" from a built binary:
+#   macos/bundle.sh target/release/duskfm 2.1.0 out [portable]
 # With `portable`, the app keeps its data in a folder beside itself (see portable.txt).
 # The app is signed ad hoc (there's no Developer ID), so macOS asks before its first
-# launch: right-click it and pick Open, or run `xattr -dr com.apple.quarantine bitchord.app`.
+# launch: right-click it and pick Open, or run `xattr -dr com.apple.quarantine "Dusk FM.app"`.
 set -e
 
 bin=$1
@@ -13,23 +13,23 @@ kind=$4
 [ -n "$bin" ] && [ -n "$version" ] && [ -n "$out" ] || { echo "usage: $0 <binary> <version> <out dir>"; exit 1; }
 here=$(cd "$(dirname "$0")" && pwd)
 icon="$here/../assets/icon/icon.png"
-app="$out/bitchord.app"
+app="$out/Dusk FM.app"
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp "$bin" "$app/Contents/MacOS/bitchord"
-chmod 755 "$app/Contents/MacOS/bitchord"
+cp "$bin" "$app/Contents/MacOS/duskfm"
+chmod 755 "$app/Contents/MacOS/duskfm"
 sed "s/@VERSION@/$version/g" "$here/Info.plist" > "$app/Contents/Info.plist"
 
-# The Dock and Finder icon, at each size iconutil takes up to the 256 px source.
+# The Dock and Finder icon, at every size iconutil takes, from the 1024 px source.
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-set=$tmp/bitchord.iconset
+set=$tmp/duskfm.iconset
 mkdir "$set"
-for spec in 16:16x16 32:16x16@2x 32:32x32 64:32x32@2x 128:128x128 256:128x128@2x 256:256x256; do
+for spec in 16:16x16 32:16x16@2x 32:32x32 64:32x32@2x 128:128x128 256:128x128@2x 256:256x256 512:256x256@2x 512:512x512 1024:512x512@2x; do
     sips -z "${spec%%:*}" "${spec%%:*}" "$icon" --out "$set/icon_${spec#*:}.png" >/dev/null
 done
-iconutil -c icns "$set" -o "$app/Contents/Resources/bitchord.icns"
+iconutil -c icns "$set" -o "$app/Contents/Resources/duskfm.icns"
 
 # Before signing: the signature seals everything in Resources.
 [ "$kind" = portable ] && cp "$here/portable.txt" "$app/Contents/Resources/portable.txt"

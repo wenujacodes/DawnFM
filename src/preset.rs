@@ -370,7 +370,7 @@ impl Preset {
     fn builtin() -> Self {
         Self {
             id: DEFAULT_ID.into(),
-            name: "BitChord".into(),
+            name: "Dusk FM".into(),
             creators: vec!["wenujacodes".into()],
             blurb: "The app's own look: near-black pages tinted by the album art, a red accent, a floating sidebar and bold lyrics.".into(),
             accent: DEFAULT_ACCENT.into(),

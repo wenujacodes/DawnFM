@@ -24,7 +24,7 @@ macro_rules! variant {
 pub const CLASSIC: &str = "classic";
 
 pub static ALL: &[Variant] = &[
-    Variant { id: CLASSIC, name: "BitChord", ico: include_bytes!("../assets/icon/icon.ico") },
+    Variant { id: CLASSIC, name: "Dusk FM", ico: include_bytes!("../assets/icon/icon.ico") },
     variant!("official", "Original"),
     variant!("smilering", "Smile ring"),
     variant!("gear", "Rust gear"),

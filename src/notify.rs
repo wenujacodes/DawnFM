@@ -33,7 +33,7 @@ pub fn text(title: &str, artist: &str) -> String {
 pub fn post(body: String) {
     static WARNED: AtomicBool = AtomicBool::new(false);
     std::thread::spawn(move || {
-        let ok = match std::process::Command::new("/usr/bin/osascript").args(args("BitChord", &body)).output() {
+        let ok = match std::process::Command::new("/usr/bin/osascript").args(args("Dusk FM", &body)).output() {
             Ok(out) if out.status.success() => return,
             Ok(out) => format!("{}: {}", out.status, String::from_utf8_lossy(&out.stderr).trim()),
             Err(e) => e.to_string(),
@@ -54,9 +54,9 @@ mod tests {
         assert_eq!(text("Song", ""), "Song");
         // The text is passed as-is, after `--`: quotes and backslashes can't break out.
         let body = text("\"; do shell script \"rm -rf ~", "-a \\ b");
-        let a = args("BitChord", &body);
+        let a = args("Dusk FM", &body);
         assert_eq!(a.len(), 9);
-        assert_eq!(&a[6..], ["--", "BitChord", body.as_str()]);
+        assert_eq!(&a[6..], ["--", "Dusk FM", body.as_str()]);
         assert!(a[..6].iter().all(|s| !s.contains("rm")));
     }
 }

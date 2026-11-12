@@ -13,7 +13,7 @@ use serde_json::Value;
 use crate::stream::Format;
 
 /// Addons key off this prefix; anything else is answered `403 UA_BLOCKED`.
-pub const USER_AGENT: &str = concat!("BitChord/v", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT: &str = concat!("DuskFM/v", env!("CARGO_PKG_VERSION"));
 const TIER: &str = "LOSSLESS";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);

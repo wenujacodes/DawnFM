@@ -490,57 +490,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
 
 [[package]]
-name = "bitchord"
-version = "2.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "bytes",
- "crossbeam-channel",
- "directories",
- "discord-rich-presence",
- "eframe",
- "egui",
- "egui_extras",
- "env_logger",
- "filmcraft-ac3",
- "futures-util",
- "hmac",
- "image",
- "keyring",
- "libc",
- "localzone",
- "log",
- "md-5",
- "memmap2",
- "mp4ameta",
- "objc2 0.6.5",
- "objc2-foundation 0.3.2",
- "reqwest",
- "rfd",
- "rodio",
- "roxmltree",
- "rquickjs",
- "rusty-opus",
- "serde",
- "serde_json",
- "sha1 0.10.7",
- "sha2",
- "skrifa",
- "souvlaki",
- "symphonia",
- "tao",
- "tokio",
- "tokio-tungstenite",
- "tray-icon",
- "unicode-bidi",
- "unicode-normalization",
- "url",
- "wgpu",
- "wry",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1399,6 +1348,57 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "duskfm"
+version = "2.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "crossbeam-channel",
+ "directories",
+ "discord-rich-presence",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "env_logger",
+ "filmcraft-ac3",
+ "futures-util",
+ "hmac",
+ "image",
+ "keyring",
+ "libc",
+ "localzone",
+ "log",
+ "md-5",
+ "memmap2",
+ "mp4ameta",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "reqwest",
+ "rfd",
+ "rodio",
+ "roxmltree",
+ "rquickjs",
+ "rusty-opus",
+ "serde",
+ "serde_json",
+ "sha1 0.10.7",
+ "sha2",
+ "skrifa",
+ "souvlaki",
+ "symphonia",
+ "tao",
+ "tokio",
+ "tokio-tungstenite",
+ "tray-icon",
+ "unicode-bidi",
+ "unicode-normalization",
+ "url",
+ "wgpu",
+ "wry",
+]
 
 [[package]]
 name = "ecolor"

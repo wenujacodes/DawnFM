@@ -1,7 +1,7 @@
 name: Release
 
-# Push a tag like v2.0.0 to build the app for Apple Silicon and Intel and publish
-# a GitHub Release with a .dmg and a .zip for each.
+# Push a tag like v2.1.0 to build Dusk FM for Apple Silicon and Intel and publish it
+# to the public DuskFM-Releases repo, with the source code attached.
 on:
   push:
     tags: ['v*']
@@ -41,20 +41,20 @@ jobs:
 
       - name: Make the app bundles
         run: |
-          sh macos/bundle.sh target/release/bitchord "${{ steps.version.outputs.value }}" out
-          sh macos/bundle.sh target/release/bitchord "${{ steps.version.outputs.value }}" out-portable portable
+          sh macos/bundle.sh target/release/duskfm "${{ steps.version.outputs.value }}" out
+          sh macos/bundle.sh target/release/duskfm "${{ steps.version.outputs.value }}" out-portable portable
 
       # The app's updater looks for these exact names (asset_name in src/update.rs).
       - name: Package .dmg and .zip
         run: |
           v="${{ steps.version.outputs.value }}"
-          name="BitChord-$v-macos-${{ matrix.arch }}"
+          name="DuskFM-$v-macos-${{ matrix.arch }}"
           mkdir -p dist dmg
-          ditto -c -k --keepParent out/bitchord.app "dist/$name.zip"
-          ditto -c -k --keepParent out-portable/bitchord.app "dist/$name-portable.zip"
-          cp -R out/bitchord.app dmg/
+          ditto -c -k --keepParent "out/Dusk FM.app" "dist/$name.zip"
+          ditto -c -k --keepParent "out-portable/Dusk FM.app" "dist/$name-portable.zip"
+          cp -R "out/Dusk FM.app" dmg/
           ln -s /Applications dmg/Applications
-          hdiutil create -volname "BitChord" -srcfolder dmg -ov -format UDZO "dist/$name.dmg"
+          hdiutil create -volname "Dusk FM" -srcfolder dmg -ov -format UDZO "dist/$name.dmg"
           ls -lh dist
 
       - uses: actions/upload-artifact@v7
@@ -81,17 +81,17 @@ jobs:
       - name: Source code zip
         run: |
           v="${GITHUB_REF_NAME#v}"
-          git archive --format=zip -o "dist/BitChord-$v-source.zip" "$GITHUB_REF_NAME"
+          git archive --format=zip -o "dist/DuskFM-$v-source.zip" "$GITHUB_REF_NAME"
           ls -lh dist
 
       - name: Release notes
         run: |
           prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
           {
-            echo "The app is signed ad hoc, so macOS asks before the first launch: right-click bitchord.app and choose Open."
+            echo "The app is signed ad hoc, so macOS asks before the first launch: right-click Dusk FM and choose Open."
             echo
             echo "- **Apple Silicon** (M1 and newer): \`arm64\` · **Intel**: \`x64\`"
-            echo "- \`.dmg\`: drag BitChord to Applications. \`-portable.zip\`: keeps its settings in a folder beside the app."
+            echo "- \`.dmg\`: drag Dusk FM to Applications. \`-portable.zip\`: keeps its settings in a folder beside the app."
             echo "- \`-source.zip\`: the full source code of this version (GPL-3.0)."
             echo
             echo "## Changes"
@@ -101,10 +101,10 @@ jobs:
 
       - name: Create the release in the public repo
         env:
-          # A fine-grained token with Contents: read and write on BitChord-macOS-Releases.
+          # A fine-grained token with Contents: read and write on DuskFM-Releases.
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
-            --repo wenujacodes/BitChord-macOS-Releases \
-            --title "BitChord ${GITHUB_REF_NAME#v}" \
+            --repo wenujacodes/DuskFM-Releases \
+            --title "Dusk FM ${GITHUB_REF_NAME#v}" \
             --notes-file notes.md

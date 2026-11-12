@@ -18,7 +18,7 @@ impl Media {
         wake: impl Fn() + Send + Sync + 'static,
     ) -> Option<Self> {
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
-        let config = PlatformConfig { display_name: "BitChord", dbus_name: "ytm_rs", hwnd };
+        let config = PlatformConfig { display_name: "Dusk FM", dbus_name: "duskfm", hwnd };
         let mut controls = MediaControls::new(config)
             .map_err(|e| log::warn!("media controls unavailable: {e:?}"))
             .ok()?;
