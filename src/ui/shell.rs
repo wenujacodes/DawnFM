@@ -140,9 +140,8 @@ fn nav_bg(ui: &Ui, look: NavLook, rect: Rect, h: f32, s: f32) -> Color32 {
             icon_fg
         }
         NavStyle::Accent => {
-            ui.painter().rect_filled(rect, nav_r, theme::glass(0.05 * h));
-            ui.painter().rect_filled(rect, nav_r, theme::with_alpha(accent, 0.22 * s));
-            theme::lerp_color(icon_fg, accent, s)
+            ui.painter().rect_filled(rect, nav_r, theme::glass(0.05 * h + 0.08 * s));
+            accent
         }
         NavStyle::Bar => {
             ui.painter().rect_filled(rect, nav_r, theme::glass(0.05 * h));
@@ -213,8 +212,51 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
 
     let mut go_to: Option<Page> = None;
     let look = NavLook::of(app);
+    // Draws one row: `paint` puts its icon at the given point in the given colour.
+    let row = |ui: &mut Ui, paint: &dyn Fn(&Ui, Pos2, Color32), label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+        let mut resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
+        if collapsed {
+            resp = resp.on_hover_text(label);
+        }
+        let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
+        let s = theme::anim_bool(ui.ctx(), resp.id.with("s"), selected, 0.2);
+        let icon_fg = nav_bg(ui, look, rect, h, s);
+        paint(ui, pos2(rect.left() + ICON_X, rect.center().y), icon_fg);
+        if a > 0.0 {
+            let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
+            let font = if selected { theme::semibold(14.0) } else { theme::regular(14.0) };
+            ui.painter().text(pos2(rect.left() + 48.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
+        }
+        if resp.clicked() {
+            *go_to = Some(page);
+        }
+    };
+    let icon_row = |ui: &mut Ui, glyph: char, label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
+        row(ui, &|ui: &Ui, at: Pos2, c: Color32| icon_at(ui, at, glyph, 17.0, c), label, page, selected, go_to);
+    };
+    // A section's heading; a click folds the section away (remembered across launches).
+    // On the collapsed rail headings fold away and every section shows.
+    let section = |ui: &mut Ui, title: &str| -> bool {
+        let key = egui::Id::unique(("sidebar-section", title));
+        let mut open = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(key, || true));
+        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0 * (1.0 - t)), Sense::click());
+        if a > 0.0 {
+            let resp = named(resp, title).on_hover_cursor(egui::CursorIcon::PointingHand);
+            let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
+            let c = theme::with_alpha(theme::lerp_color(theme::text_faint(), theme::text_dim(), h), a);
+            ui.painter().text(pos2(r.left() + 8.0, r.center().y), Align2::LEFT_CENTER, title, theme::semibold(12.0), c);
+            let k = theme::anim_bool(ui.ctx(), resp.id.with("open"), open, 0.15);
+            icon_at(ui, pos2(r.right() - 12.0, r.center().y), if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 14.0, c);
+            if resp.clicked() && !collapsed {
+                open = !open;
+                ui.data_mut(|d| d.insert_persisted(key, open));
+            }
+        }
+        open || collapsed
+    };
     let nav = |ui: &mut Ui, glyph: &'static [u8], size: f32, label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
-        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 42.0), Sense::click());
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
         let mut resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
         if collapsed {
             resp = resp.on_hover_text(label);
@@ -225,7 +267,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), size, glyph, icon_fg);
         if a > 0.0 {
             let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
-            let font = if selected { theme::semibold(15.0) } else { theme::regular(15.0) };
+            let font = if selected { theme::semibold(14.0) } else { theme::regular(14.0) };
             ui.painter().text(pos2(rect.left() + 48.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
         }
         if resp.clicked() {
@@ -242,15 +284,22 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         search_field(app, ui, ui.available_width());
         ui.add_space(8.0);
     }
-    nav(ui, glyphs::HOME, APPLE, "Home", Page::Home, p == Page::Home, &mut go_to);
-    nav(ui, glyphs::EXPLORE, APPLE, "New", Page::New, p == Page::New, &mut go_to);
-    nav(ui, glyphs::LIBRARY, APPLE, "Library", Page::Library(LibTab::Playlists), matches!(p, Page::Library(_)), &mut go_to);
-    nav(ui, glyphs::DOWNLOAD, APPLE, "Downloads", Page::Downloads, p == Page::Downloads, &mut go_to);
-
-    ui.add_space(14.0);
-    let (line, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
-    ui.painter().rect_filled(line, 0.0, theme::glass(0.08));
-    ui.add_space(14.0 - 4.0 * t);
+    if section(ui, "YouTube Music") {
+        nav(ui, glyphs::HOME, APPLE, "Home", Page::Home, p == Page::Home, &mut go_to);
+        nav(ui, glyphs::EXPLORE, APPLE, "New", Page::New, p == Page::New, &mut go_to);
+    }
+    ui.add_space(6.0);
+    if section(ui, "Library") {
+        let lib = |tab: LibTab| p == Page::Library(tab);
+        nav(ui, glyphs::LIBRARY, APPLE, "Playlists", Page::Library(LibTab::Playlists), lib(LibTab::Playlists), &mut go_to);
+        icon_row(ui, icon::MUSIC, "Songs", Page::Library(LibTab::Songs), lib(LibTab::Songs), &mut go_to);
+        icon_row(ui, icon::DISC_3, "Albums", Page::Library(LibTab::Albums), lib(LibTab::Albums), &mut go_to);
+        icon_row(ui, icon::HISTORY, "Recently Played", Page::Library(LibTab::History), lib(LibTab::History), &mut go_to);
+        icon_row(ui, icon::UPLOAD, "Uploads", Page::Library(LibTab::Uploads), lib(LibTab::Uploads), &mut go_to);
+        nav(ui, glyphs::DOWNLOAD, APPLE, "Downloads", Page::Downloads, p == Page::Downloads, &mut go_to);
+    }
+    ui.add_space(6.0);
+    let playlists_open = section(ui, "Playlists");
 
     // Playlists that appeared since the order was last changed join it at the end, so a
     // drag can place any of them.
@@ -287,10 +336,8 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
             }
             return;
         }
-        // The heading folds away with the labels.
-        let (head, _) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0 * (1.0 - t)), Sense::hover());
-        if a > 0.0 {
-            ui.painter().text(head.left_top() + vec2(8.0, 0.0), Align2::LEFT_TOP, "PLAYLISTS", theme::semibold(11.0), theme::with_alpha(theme::text_faint(), a));
+        if !playlists_open {
+            return;
         }
         let bars = if t > 0.0 { egui::scroll_area::ScrollBarVisibility::AlwaysHidden } else { egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded };
         egui::ScrollArea::vertical().id_salt("sidebar-pl").auto_shrink(false).scroll_bar_visibility(bars).show(ui, |ui| {
@@ -325,7 +372,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
             let down = ui.input(|i| i.pointer.any_down());
             let pointer = ui.input(|i| i.pointer.interact_pos());
             for c in &visible {
-                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 48.0), Sense::click_and_drag());
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::click_and_drag());
                 let id = match &c.target {
                     Target::Playlist(id) => id.clone(),
                     _ => continue,
@@ -352,12 +399,12 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                 let selected = matches!(&c.target, Target::Playlist(id) if app.page == Page::Playlist(id.clone()));
                 let lift = if is_dragged { 0.10 } else { 0.0 };
                 ui.painter().rect_filled(rect, 8.0, theme::glass(0.05 * h + if selected { 0.08 } else { 0.0 } + lift));
-                let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(36.0));
+                let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(28.0));
                 paint_cover(ui, img, &c.thumbs, theme::thumb_radius(), 1.0);
                 if a > 0.0 {
                     let w = full_w - 58.0;
-                    text_at(ui, pos2(img.right() + 10.0, rect.top() + 7.0), &c.title, theme::semibold(13.5), theme::with_alpha(theme::text(), a), w);
-                    text_at(ui, pos2(img.right() + 10.0, rect.top() + 26.0), &c.subtitle, theme::regular(12.0), theme::with_alpha(theme::text_dim(), a), w);
+                    let fg = if selected { theme::text() } else { theme::lerp_color(theme::text_dim(), theme::text(), h) };
+                    text_at(ui, pos2(rect.left() + 48.0, rect.center().y - 9.0), &c.title, theme::regular(14.0), theme::with_alpha(fg, a), w);
                 }
                 egui::Popup::context_menu(&resp).show(|ui| {
                     ui.set_min_width(190.0);
