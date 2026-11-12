@@ -212,13 +212,19 @@ pub fn pill(ui: &mut Ui, label: &str, glyph: Option<char>, primary: bool) -> Res
     let (rect, resp) = ui.allocate_exact_size(vec2(text.size().x + icon_w + 36.0, 38.0), Sense::click());
     let resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
     let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
-    let (fill, fg) = if primary {
+    // Themes with accent chips fill primary buttons with the accent, in rounded squares.
+    let accented = primary && crate::preset::active().app.chip == crate::preset::ChipStyle::Accent;
+    let (fill, fg) = if accented {
+        let a = ui.ctx().data(|d| d.get_temp::<Color32>(egui::Id::unique("accent"))).unwrap_or(theme::RED);
+        (theme::lerp_color(a, Color32::WHITE, 0.12 * h), Color32::WHITE)
+    } else if primary {
         if theme::light() { (theme::lerp_color(theme::text(), Color32::BLACK, h), Color32::WHITE) } else { (theme::lerp_color(Color32::from_gray(240), Color32::WHITE, h), Color32::from_gray(12)) }
     } else {
         (theme::glass(0.10 + 0.08 * h), theme::text())
     };
+    let radius = if accented { (crate::preset::active().chrome.radius * 0.8).clamp(6.0, 19.0) } else { 19.0 };
     let r = rect.shrink(if resp.is_pointer_button_down_on() { 1.0 } else { 0.0 });
-    ui.painter().rect_filled(r, 19.0, fill);
+    ui.painter().rect_filled(r, radius, fill);
     let mut x = r.left() + 18.0;
     if let Some(g) = glyph {
         icon_at(ui, pos2(x + 8.0, r.center().y), g, 17.0, fg);

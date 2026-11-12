@@ -662,7 +662,7 @@ fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
                 play_pill(ui, acts, &target, tracks);
-                if circle_action(ui, CircleGlyph::Char(icon::SHUFFLE), "Shuffle", false).clicked() && !tracks.is_empty() {
+                if pill(ui, "Shuffle", Some(icon::SHUFFLE), true).clicked() && !tracks.is_empty() {
                     let mut t = tracks.clone();
                     super::shuffle(&mut t);
                     acts.push(Action::Play(t, 0));
