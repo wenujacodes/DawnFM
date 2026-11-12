@@ -1728,7 +1728,7 @@ mod live {
     #[tokio::test]
     #[ignore]
     async fn matching_live() {
-        let dir = directories::ProjectDirs::from("", "", "ytm-rs").unwrap().data_dir().to_path_buf();
+        let dir = directories::ProjectDirs::from("", "", crate::DATA_NAME).unwrap().data_dir().to_path_buf();
         let api = crate::ytmapi::Api::new(&dir);
         assert!(api.account().is_some(), "not signed in");
         let songs: &[(&str, &[&str])] = &[

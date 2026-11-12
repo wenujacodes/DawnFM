@@ -6,13 +6,15 @@
 
 use std::path::Path;
 
-const SERVICE: &str = "ytm-rs";
+const SERVICE: &str = "DuskFM";
+/// The Keychain service the sign-ins were saved under before the rename.
+const OLD_SERVICE: &str = "ytm-rs";
 
 /// The credential names for `name`, scoped to the data folder when it isn't the
 /// default one (`YTM_DATA_DIR` dev profiles, tests), so those never share or touch
 /// the real sign-ins.
 fn key(name: &str, data_dir: &Path) -> String {
-    let default = directories::ProjectDirs::from("", "", "ytm-rs").map(|d| d.data_dir().to_path_buf());
+    let default = directories::ProjectDirs::from("", "", crate::DATA_NAME).map(|d| d.data_dir().to_path_buf());
     if default.as_deref() == Some(data_dir) {
         name.to_owned()
     } else {
@@ -28,15 +30,41 @@ mod store {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn entry(key: &str, part: usize) -> keyring::Result<keyring::Entry> {
+        entry_in(super::SERVICE, key, part)
+    }
+
+    fn entry_in(service: &str, key: &str, part: usize) -> keyring::Result<keyring::Entry> {
         let user = if part == 0 { key.to_owned() } else { format!("{key} #{}", part + 1) };
-        keyring::Entry::new(super::SERVICE, &user)
+        keyring::Entry::new(service, &user)
     }
 
     pub fn get(key: &str) -> anyhow::Result<Option<Vec<u8>>> {
-        let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let found = {
+            let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            get_in(super::SERVICE, key)?
+        };
+        if found.is_some() {
+            return Ok(found);
+        }
+        // Saved before the rename: copy it to the new name (the old entry stays).
+        let old = {
+            let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            get_in(super::OLD_SERVICE, key).ok().flatten()
+        };
+        if let Some(secret) = &old {
+            match set(key, secret) {
+                Ok(()) => log::info!("moved {key:?} to the new Keychain name"),
+                Err(e) => log::warn!("couldn't copy {key:?} to the new Keychain name: {e:#}"),
+            }
+        }
+        Ok(old)
+    }
+
+    /// The secret saved under `service`, read part by part. The caller holds `LOCK`.
+    fn get_in(service: &str, key: &str) -> anyhow::Result<Option<Vec<u8>>> {
         let mut out = Vec::new();
         for part in 0.. {
-            match entry(key, part)?.get_secret() {
+            match entry_in(service, key, part)?.get_secret() {
                 Ok(bytes) => {
                     let full = bytes.len() == CHUNK;
                     out.extend(bytes);
@@ -67,6 +95,13 @@ mod store {
 
     pub fn delete(key: &str) -> anyhow::Result<()> {
         let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // The pre-rename copy goes too, or the next read would bring the sign-in back.
+        for part in 0.. {
+            match entry_in(super::OLD_SERVICE, key, part).and_then(|e| e.delete_credential()) {
+                Ok(()) => {}
+                _ => break,
+            }
+        }
         delete_from(key, 0)
     }
 

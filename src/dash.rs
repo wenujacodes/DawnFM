@@ -352,7 +352,7 @@ mod tests {
     fn live_blinding_lights_atmos_decodes_to_playable_pcm() {
         // Reads the local hires source and fetches a real Tidal Atmos stream.
         // Never committed with secrets; run manually when debugging.
-        let data = std::fs::read(directories::ProjectDirs::from("", "", "ytm-rs").unwrap().data_dir().join("app.ron")).unwrap();
+        let data = std::fs::read(directories::ProjectDirs::from("", "", crate::DATA_NAME).unwrap().data_dir().join("app.ron")).unwrap();
         let text = String::from_utf8_lossy(&data);
         let base = text.split("\"hires_source\":").nth(1).and_then(|s| s.split('"').nth(1)).unwrap().replace("\\n", "\n").lines().next().unwrap().to_owned();
         let rt = tokio::runtime::Runtime::new().unwrap();

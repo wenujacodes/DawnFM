@@ -84,6 +84,7 @@ fn main() -> eframe::Result {
     } else if deeplink::forward_show() {
         return Ok(());
     }
+    migrate_data();
     init_logging();
     // Jam links on macOS come as an Apple Event, not argv: catch it before the loop starts.
     deeplink::install();
@@ -247,6 +248,10 @@ fn init_logging() {
     builder.init();
 }
 
+/// The app's folder in Application Support, and the one it had before the rename.
+pub const DATA_NAME: &str = "DuskFM";
+const OLD_DATA_NAME: &str = "ytm-rs";
+
 /// Settings, caches and the sign-in: `data` beside the portable build's exe, else the
 /// user's app data. Dev hook: YTM_DATA_DIR runs on a separate profile.
 fn data_dir() -> std::path::PathBuf {
@@ -256,5 +261,37 @@ fn data_dir() -> std::path::PathBuf {
     if let Some(dir) = update::portable_dir() {
         return dir.join("data");
     }
-    directories::ProjectDirs::from("", "", "ytm-rs").expect("no home directory").data_dir().to_path_buf()
+    directories::ProjectDirs::from("", "", DATA_NAME).expect("no home directory").data_dir().to_path_buf()
+}
+
+/// First launch after the rename: copy the old folder's settings and caches into the
+/// new one (a copy, so another app still using the old folder keeps it).
+fn migrate_data() {
+    if std::env::var_os("YTM_DATA_DIR").is_some() || update::portable_dir().is_some() {
+        return;
+    }
+    let (Some(old), Some(new)) = (directories::ProjectDirs::from("", "", OLD_DATA_NAME), directories::ProjectDirs::from("", "", DATA_NAME)) else { return };
+    let (old, new) = (old.data_dir(), new.data_dir());
+    if new.exists() || !old.is_dir() {
+        return;
+    }
+    fn copy(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(to)?;
+        for e in std::fs::read_dir(from)?.flatten() {
+            let name = e.file_name();
+            // Old logs and half-done update downloads aren't worth keeping.
+            if name.to_string_lossy().ends_with(".log") || name == "updates" {
+                continue;
+            }
+            let (src, dst) = (e.path(), to.join(&name));
+            if e.file_type()?.is_dir() { copy(&src, &dst)? } else { std::fs::copy(&src, &dst).map(|_| ())? }
+        }
+        Ok(())
+    }
+    // Into a temporary folder first, so a failed copy is tried again next launch.
+    let tmp = new.with_extension("moving");
+    let _ = std::fs::remove_dir_all(&tmp);
+    if copy(old, &tmp).and_then(|_| std::fs::rename(&tmp, new)).is_err() {
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }

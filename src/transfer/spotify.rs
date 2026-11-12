@@ -694,7 +694,7 @@ mod library_live {
     #[tokio::test]
     #[ignore]
     async fn library_live() {
-        let dir = directories::ProjectDirs::from("", "", "ytm-rs").unwrap().data_dir().to_path_buf();
+        let dir = directories::ProjectDirs::from("", "", crate::DATA_NAME).unwrap().data_dir().to_path_buf();
         let cookie = String::from_utf8(crate::vault::get("spotify sp_dc", &dir).expect("signed in")).unwrap();
         let c = super::Client::connect(Some(&cookie), &dir).await.unwrap();
         let body = c
