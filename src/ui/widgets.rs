@@ -517,12 +517,8 @@ pub fn card(ui: &mut Ui, c: &Card, width: f32, liked: bool, acts: &mut Vec<Actio
     let title_h = title.size().y;
     ui.painter().galley(pos2(rect.left(), img.bottom() + 10.0), title, tcolor);
     let sub_y = img.bottom() + 14.0 + title_h;
-    linked_text(ui, pos2(rect.left(), sub_y), &c.subtitle, &c.links, theme::regular(13.0), theme::text_dim(), width - 36.0, acts);
-    // On the subtitle line, whose width leaves room for it, so a two-line title never sits under it.
-    let more_rect = Rect::from_center_size(pos2(rect.right() - 16.0, sub_y + 8.0), Vec2::splat(30.0));
-    let more = more_button(ui, more_rect, resp.id.with("more"), "Options");
-    egui::Popup::menu(&more).show(|ui| card_menu_contents(ui, c, liked, acts));
-    // Right-click anywhere on the tile opens the same menu.
+    linked_text(ui, pos2(rect.left(), sub_y), &c.subtitle, &c.links, theme::regular(13.0), theme::text_dim(), width, acts);
+    // Right-click anywhere on the tile opens its menu.
     egui::Popup::context_menu(&resp).show(|ui| card_menu_contents(ui, c, liked, acts));
 
     if play_hit {
@@ -531,7 +527,7 @@ pub fn card(ui: &mut Ui, c: &Card, width: f32, liked: bool, acts: &mut Vec<Actio
             Target::Song(t) => acts.push(Action::Radio(t.clone())),
             t => acts.push(Action::PlayCollection(t.clone(), false)),
         }
-    } else if resp.clicked() && !more.clicked() {
+    } else if resp.clicked() {
         acts.push(Action::Open(c.target.clone()));
     }
 }
@@ -558,17 +554,6 @@ fn card_menu_contents(ui: &mut Ui, c: &Card, liked: bool, acts: &mut Vec<Action>
             ui.add_space(3.0);
         }
     }
-}
-
-fn more_button(ui: &mut Ui, rect: Rect, id: egui::Id, label: &str) -> Response {
-    let response = named(ui.interact(rect, id, Sense::click()), label)
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
-    if response.hovered() || egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&response)) {
-        ui.painter().rect_filled(rect, 7.0, theme::glass(0.16));
-    }
-    let color = if response.hovered() { theme::text() } else { theme::text_dim() };
-    icon_at(ui, rect.center(), icon::ELLIPSIS_VERTICAL, 18.0, color);
-    response
 }
 
 fn menu_row(ui: &mut Ui, label: &str, draw: impl FnOnce(&Ui, Pos2, Color32)) -> bool {
@@ -902,10 +887,7 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
     if let Some(d) = t.duration {
         ui.painter().text(pos2(right, cy), Align2::RIGHT_CENTER, super::fmt_time(d), theme::regular(13.0), theme::text_dim());
     }
-    let more_rect = Rect::from_center_size(pos2(rect.right() - 20.0, cy), Vec2::splat(30.0));
-    let more = more_button(ui, more_rect, base.id.with("more"), "Song options");
-    egui::Popup::menu(&more).show(|ui| song_menu(ui, t, o.liked, o.remove, acts));
-    // Right-click anywhere on the row opens the same menu.
+    // Right-click anywhere on the row opens its menu.
     egui::Popup::context_menu(&resp).show(|ui| song_menu(ui, t, o.liked, o.remove, acts));
     resp
 }
