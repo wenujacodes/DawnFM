@@ -246,9 +246,22 @@ impl Updater {
         };
         let url = asset["browser_download_url"].as_str().ok_or_else(|| anyhow::anyhow!("asset has no URL"))?;
         let size = asset["size"].as_u64().unwrap_or(0);
+        let digest = asset_digest(asset);
+        if digest.is_none() {
+            log::warn!("update: release {tag} gives no SHA-256 for {want}; checking its size only");
+        }
         std::fs::create_dir_all(&self.dir)?;
         let path = self.dir.join(&want);
-        if std::fs::metadata(&path).map(|m| m.len()).ok() != Some(size) || size == 0 {
+        // A copy left from an earlier check is reused only if it still matches.
+        let mut reuse = std::fs::metadata(&path).map(|m| m.len()).ok() == Some(size) && size > 0;
+        if reuse && let Some(want_hash) = &digest
+            && file_sha256(&path)? != *want_hash
+        {
+            log::warn!("update: cached {want} doesn't match its SHA-256; downloading again");
+            let _ = std::fs::remove_file(&path);
+            reuse = false;
+        }
+        if !reuse {
             log::info!("update: downloading {version} ({size} bytes)");
             self.set(State::Downloading { version: version.clone(), percent: 0 });
             let mut resp = http.get(url).send().await?.error_for_status()?;
@@ -256,8 +269,12 @@ impl Updater {
             let part = path.with_extension("part");
             let mut file = std::io::BufWriter::new(std::fs::File::create(&part)?);
             let (mut got, mut shown) = (0u64, 0u8);
+            // Hashed as it streams, so the file isn't read twice.
+            use sha2::Digest;
+            let mut hasher = sha2::Sha256::new();
             while let Some(chunk) = resp.chunk().await? {
                 std::io::Write::write_all(&mut file, &chunk)?;
+                hasher.update(&chunk);
                 got += chunk.len() as u64;
                 let percent = (got * 100).checked_div(size).map_or(0, |p| p.min(100) as u8);
                 if percent != shown {
@@ -270,6 +287,13 @@ impl Updater {
             if size > 0 && got != size {
                 let _ = std::fs::remove_file(&part);
                 anyhow::bail!("download incomplete ({got} of {size} bytes)");
+            }
+            if let Some(want_hash) = &digest {
+                let got_hash = hex(&hasher.finalize());
+                if got_hash != *want_hash {
+                    let _ = std::fs::remove_file(&part);
+                    anyhow::bail!("the download doesn't match the release's SHA-256 (expected {want_hash}, got {got_hash}); not installing it");
+                }
             }
             std::fs::rename(&part, &path)?;
         }
@@ -398,6 +422,25 @@ fn run_detached(script: &str) {
     }
 }
 
+/// The SHA-256 GitHub gives for a release asset (`"digest": "sha256:<hex>"`), as
+/// lowercase hex; `None` for older releases without one.
+fn asset_digest(asset: &serde_json::Value) -> Option<String> {
+    let hex = asset["digest"].as_str()?.strip_prefix("sha256:")?.to_ascii_lowercase();
+    (hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then_some(hex)
+}
+
+/// A file's SHA-256 as lowercase hex, read in pieces.
+fn file_sha256(path: &Path) -> anyhow::Result<String> {
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    std::io::copy(&mut std::fs::File::open(path)?, &mut hasher)?;
+    Ok(hex(&hasher.finalize()))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 fn client() -> anyhow::Result<reqwest::Client> {
     Ok(crate::proxy::apply(reqwest::Client::builder()).user_agent(concat!("ytm-rs/", env!("CARGO_PKG_VERSION"))).connect_timeout(std::time::Duration::from_secs(10)).read_timeout(std::time::Duration::from_secs(30)).build()?)
 }
@@ -405,6 +448,22 @@ fn client() -> anyhow::Result<reqwest::Client> {
 #[cfg(test)]
 mod tests {
     use super::newer;
+
+    #[test]
+    fn asset_digests() {
+        let a = |d: serde_json::Value| super::asset_digest(&serde_json::json!({ "name": "x.dmg", "digest": d }));
+        let hex = "FFD9938D1CEC7E3C4A3F1B3078D2FB9650D9AE88137AA0C3CE19D4176F73C02F";
+        assert_eq!(a(format!("sha256:{hex}").into()), Some(hex.to_ascii_lowercase()));
+        assert_eq!(a(serde_json::Value::Null), None);
+        assert_eq!(a("sha1:abcd".into()), None);
+        assert_eq!(a("sha256:abcd".into()), None);
+        assert_eq!(a(format!("sha256:{}", "zz".repeat(32)).into()), None);
+        // The streamed hash and the file hash agree with a known value.
+        let path = std::env::temp_dir().join(format!("bitchord-digest-test-{}", std::process::id()));
+        std::fs::write(&path, b"abc").unwrap();
+        assert_eq!(super::file_sha256(&path).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn version_order() {
