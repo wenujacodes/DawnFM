@@ -475,22 +475,6 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     }
 }
 
-// ------------------------------------------------------------------ top bar
-
-pub fn top_bar(app: &mut App, ui: &mut Ui) {
-    // Painted over the panel's top-right rather than laid out: the page's heading can
-    // then start on the title bar's line instead of under a row kept for the avatar.
-    let panel = ui.max_rect();
-    let row = Rect::from_min_size(panel.min, vec2(panel.width(), 44.0));
-    let right = panel.right() - super::titlebar::right_gap(ui.ctx(), row, 20.0);
-    let r = Rect::from_min_max(pos2(right - 36.0, panel.top()), pos2(right, panel.top() + 36.0));
-    if app.loading {
-        let spin = Rect::from_min_size(pos2(r.left() - 34.0, r.top() + 8.0), Vec2::splat(20.0));
-        let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(spin));
-        cui.spinner();
-    }
-}
-
 /// The search pill: typeahead, suggestions and Enter to search. The Search page draws
 /// it; `app.search_rect` anchors the suggestions under it.
 pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
