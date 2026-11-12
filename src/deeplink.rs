@@ -191,9 +191,13 @@ mod mac {
         // freed, and a nil object means the notification from any sender (NSApp).
         unsafe {
             let center: Retained<AnyObject> = msg_send![objc2::class!(NSNotificationCenter), defaultCenter];
-            let name = NSString::from_str("NSApplicationWillFinishLaunchingNotification");
             let none: *const AnyObject = std::ptr::null();
-            let _: () = msg_send![&*center, addObserver: &*handler, selector: sel!(willFinishLaunching:), name: &*name, object: none];
+            // AppKit installs its own GURL handler during launch, after "will finish":
+            // take it back once launching has finished too.
+            for note in ["NSApplicationWillFinishLaunchingNotification", "NSApplicationDidFinishLaunchingNotification"] {
+                let name = NSString::from_str(note);
+                let _: () = msg_send![&*center, addObserver: &*handler, selector: sel!(willFinishLaunching:), name: &*name, object: none];
+            }
         }
         // Both registrations hold a plain pointer: keep the handler for the whole run.
         std::mem::forget(handler);
