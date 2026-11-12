@@ -377,6 +377,8 @@ pub struct App {
     art_changed: f64,
     /// Apple's page for each artist visited (their display name and hero clips).
     apple_artists: std::collections::HashMap<String, Option<crate::apple::Artwork>>,
+    /// Album pages' artist photos by artist id (empty while asked for, or when none).
+    artist_photos: std::collections::HashMap<String, Vec<crate::model::Thumb>>,
     /// Motion sleeve master playlist per release key (`None`: Apple has none).
     apple_covers: std::collections::HashMap<String, Option<String>>,
     /// Releases Apple had nothing for when last asked, and when: asked again after a
@@ -713,6 +715,7 @@ impl App {
             seek_drag: None,
             art_key: None,
             apple_artists: Default::default(),
+            artist_photos: Default::default(),
             apple_covers: Default::default(),
             apple_missed: Default::default(),
             apple_motion: Default::default(),

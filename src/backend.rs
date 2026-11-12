@@ -33,6 +33,8 @@ pub enum Req {
     /// `load` comes back with the album, so an older answer can't replace a newer one.
     Album { id: String, load: u64 },
     Artist(String),
+    /// The artist's photo, for the round picture beside their name on album pages.
+    ArtistPhoto(String),
     /// `stream`: send the first page as soon as it's in and the rest as they come,
     /// rather than all of it at the end.
     Playlist { id: String, load: u64, stream: bool },
@@ -119,6 +121,7 @@ impl Req {
             Req::Segments { .. } => "SponsorBlock",
             Req::LyricsExtras { .. } => "Translation",
             Req::Art { .. } => "Art",
+            Req::ArtistPhoto(_) => "Artist photo",
             Req::AppleArtist { .. } => "Apple artist",
             Req::AppleCover { .. } => "Apple artwork",
             Req::ArtistSignature { .. } => "Artist signature",
@@ -143,7 +146,7 @@ impl Req {
 
     /// Background requests fail quietly (logged, no toast).
     fn quiet(&self) -> bool {
-        matches!(self, Req::Suggest { .. } | Req::Account | Req::Channels | Req::ServerQueue | Req::Art { .. } | Req::AppleArtist { .. } | Req::AppleCover { .. } | Req::ArtistSignature { .. } | Req::Prefetch { .. } | Req::HomeMore(_) | Req::Lyrics(_) | Req::Segments { .. } | Req::LyricsExtras { .. })
+        matches!(self, Req::Suggest { .. } | Req::Account | Req::Channels | Req::ServerQueue | Req::Art { .. } | Req::ArtistPhoto(_) | Req::AppleArtist { .. } | Req::AppleCover { .. } | Req::ArtistSignature { .. } | Req::Prefetch { .. } | Req::HomeMore(_) | Req::Lyrics(_) | Req::Segments { .. } | Req::LyricsExtras { .. })
     }
 }
 
@@ -250,6 +253,7 @@ pub enum Resp {
     /// The next page of a playlist sent as `Collection` with the same `load`.
     CollectionMore { id: String, load: u64, tracks: Vec<Track>, set_ids: Vec<Option<String>>, more: bool },
     Artist(ArtistPage),
+    ArtistPhoto { id: String, thumbs: Vec<Thumb> },
     Library(Library),
     History(Vec<Track>),
     Account { name: Option<String> },
@@ -685,6 +689,8 @@ impl Backend {
                 Req::Playlist { id, load, stream: false } => Resp::Collection { load, c: ytm::playlist(api, &id, me, None).await?, more: false },
                 Req::Playlist { id, load, stream: true } => self.stream_playlist(id, load, me).await?,
                 Req::Artist(id) => Resp::Artist(ytm::artist(api, &id).await?),
+                // The artist page's header picture, cropped square where it's drawn.
+                Req::ArtistPhoto(id) => Resp::ArtistPhoto { thumbs: ytm::artist(api, &id).await?.banner, id },
                 Req::Library => self.library().await?,
                 Req::History => Resp::History(ytm::history(api).await?),
                 Req::Account => {

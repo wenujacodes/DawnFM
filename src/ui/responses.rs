@@ -237,6 +237,9 @@ impl App {
             }
             Resp::Collection { load, c, more } => self.collection_in(load, c, more),
             Resp::CollectionMore { id, load, tracks, set_ids, more } => self.collection_more(id, load, tracks, set_ids, more),
+            Resp::ArtistPhoto { id, thumbs } => {
+                self.artist_photos.insert(id, thumbs);
+            }
             Resp::Artist(a) => {
                 // A slow answer for an artist left meanwhile doesn't replace the one on screen.
                 if matches!(&self.page, Page::Artist(id) if *id != a.id) {

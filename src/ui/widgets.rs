@@ -780,9 +780,12 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
     }
     // Picking: the cover (left 54 px) plays, the rest of the row picks.
     let hit_left = if o.pick && o.number.is_none() { rect.left() + 54.0 } else { rect.left() };
-    let hit_rect = Rect::from_min_max(pos2(hit_left, rect.top()), pos2(rect.right() - 42.0, rect.bottom()));
+    let hit_rect = Rect::from_min_max(pos2(hit_left, rect.top()), rect.max);
     let resp = named(ui.interact(hit_rect, base.id.with("play"), Sense::click()), &t.title).on_hover_cursor(egui::CursorIcon::PointingHand);
     let h = theme::anim_bool(ui.ctx(), base.id.with("h"), base.contains_pointer(), 0.15);
+    if o.number.is_some_and(|n| n % 2 == 1) {
+        ui.painter().rect_filled(rect, 8.0, theme::glass(0.025));
+    }
     if h > 0.0 || o.current {
         let a = if o.current { 0.07 + 0.05 * h } else { 0.07 * h };
         ui.painter().rect_filled(rect, 8.0, theme::glass(a));
@@ -833,13 +836,28 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
         }
         x += 54.0;
     }
-    let right = rect.right() - 51.0;
+    let right = rect.right() - 20.0;
     let dur_w = 52.0;
     let avail = right - dur_w - x;
     let wide = avail > 520.0;
-    // Album rows (numbered) are just song name and plays; other rows are
-    // title + artists, then album, then plays when there's room.
+    // Album rows (numbered), wide: one line in columns, as in Music: title, artist,
+    // album, length.
     let album_row = o.number.is_some();
+    if album_row && wide {
+        let title_col = if o.current { o.accent } else { theme::text() };
+        let (artist_x, album_x) = (x + avail * 0.38, x + avail * 0.66);
+        text_at(ui, pos2(x, cy - 9.0), &t.title, theme::semibold(14.5), title_col, artist_x - x - 16.0);
+        linked_text(ui, pos2(artist_x, cy - 8.0), &t.artist_line(), &t.artists, theme::regular(13.5), theme::text_dim(), album_x - artist_x - 16.0, acts);
+        if let Some(album) = &t.album {
+            text_at(ui, pos2(album_x, cy - 8.0), &album.name, theme::regular(13.5), theme::text_dim(), right - dur_w - album_x - 10.0);
+        }
+        if let Some(d) = t.duration {
+            ui.painter().text(pos2(right, cy), Align2::RIGHT_CENTER, super::fmt_time(d), theme::regular(13.0), theme::text_dim());
+        }
+        egui::Popup::context_menu(&resp).show(|ui| song_menu(ui, t, o.liked, o.remove, acts));
+        return resp;
+    }
+    // Other rows: title + artists, then album, then plays when there's room.
     let (title_w, plays_x, album_x) = match (wide, o.show_album, t.plays) {
         (true, true, Some(_)) => (avail * 0.45, Some(x + avail * 0.82), Some(x + avail * 0.5)),
         (true, true, None) => (avail * 0.55, None, Some(x + avail * 0.6)),
