@@ -1352,7 +1352,9 @@ impl eframe::App for App {
             }
             let main_right = ui.available_rect_before_wrap().right();
             egui::CentralPanel::default()
-                .frame(egui::Frame::new().inner_margin(egui::Margin { left: 28, right: 28, top: titlebar::top_margin(14, 42.0), bottom: 0 }))
+                // No right margin: the page's scroll bar sits at the very edge; the page
+                // keeps the same gap inside (see `pages::page`).
+                .frame(egui::Frame::new().inner_margin(egui::Margin { left: 28, right: 0, top: titlebar::top_margin(14, 42.0), bottom: 0 }))
                 .show(ui, |ui| {
                     ui.add_space(2.0);
                     pages::page(self, ui, now);

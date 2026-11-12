@@ -51,14 +51,15 @@ pub fn page(app: &mut App, ui: &mut Ui, now: f64) {
     let page = app.page.clone();
     // Each page (each album, each search) keeps its own scroll position.
     let mut area = egui::ScrollArea::vertical().id_salt(("page", &page)).auto_shrink(false);
-    // At the window's right edge: clear of where it resizes the window.
-    ui.spacing_mut().scroll.bar_outer_margin += super::titlebar::edge_inset();
+    // The scroll bar hugs the right edge of the pages.
+    ui.spacing_mut().scroll.bar_outer_margin = 2.0 + super::titlebar::edge_inset();
     // Dev hook: YTM_SCROLL=<px> pins the page scroll, for screenshots of lower sections.
     if let Some(y) = super::dev_var("YTM_SCROLL").and_then(|v| v.parse::<f32>().ok()) {
         area = area.vertical_scroll_offset(y);
     }
     let out = area.show(ui, |ui| {
-        ui.set_max_width((ui.available_width() - 20.0).max(0.0));
+        // The page's own 28 pt right gap, plus room for the scroll bar beside it.
+        ui.set_max_width((ui.available_width() - 48.0).max(0.0));
         ui.add_space(18.0 * (1.0 - t));
         match &page {
             Page::Home => home(app, ui, now),
