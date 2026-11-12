@@ -856,7 +856,7 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
     // album, length.
     let album_row = o.number.is_some();
     if album_row && wide {
-        let title_col = if o.current { o.accent } else { theme::text() };
+        let title_col = theme::text();
         let (artist_x, album_x) = (x + avail * 0.38, x + avail * 0.66);
         text_at(ui, pos2(x, cy - 9.0), &t.title, theme::semibold(14.5), title_col, artist_x - x - 16.0);
         linked_text(ui, pos2(artist_x, cy - 8.0), &t.artist_line(), &t.artists, theme::regular(13.5), theme::text_dim(), album_x - artist_x - 16.0, acts);
@@ -876,7 +876,7 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
         _ => (avail, None, None),
     };
     let plays: Option<String> = None;
-    let title_col = if o.current { o.accent } else { theme::text() };
+    let title_col = theme::text();
     let sub = match (album_row, &plays, plays_x) {
         (true, Some(p), None) => Some(p.clone()),
         (true, _, _) => None,
