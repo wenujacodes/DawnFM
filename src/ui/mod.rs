@@ -21,6 +21,7 @@ mod pages;
 mod playback;
 mod queue;
 mod responses;
+mod scroll;
 mod shell;
 mod sleep;
 mod titlebar;
@@ -456,6 +457,10 @@ pub struct App {
     /// Mouse-wheel distance still to be scrolled (smooth scrolling).
     wheel_pending: egui::Vec2,
     wheel_mods: egui::Modifiers,
+    /// The wheel/trackpad gesture under way: the axis and pane it's locked to.
+    scroll_gesture: scroll::Gesture,
+    /// The side panes (sidebar, drawers) drawn last frame, each its own scroller.
+    scroll_panes: Vec<egui::Rect>,
 
     // now playing
     np_open: bool,
@@ -757,6 +762,8 @@ impl App {
             forgetting: None,
             wheel_pending: egui::Vec2::ZERO,
             wheel_mods: egui::Modifiers::NONE,
+            scroll_gesture: scroll::Gesture::default(),
+            scroll_panes: Vec::new(),
             np_open: false,
             np_tab: if get("np_art").is_some_and(|v| v == "1") { NpTab::Art } else { NpTab::Lyrics },
             queue_open: false,
@@ -1281,6 +1288,8 @@ impl eframe::App for App {
         titlebar::set_fullscreen(&ctx, self.fullscreen);
         // The mini player, or nothing but the background while the window changes size.
         let layout = self.mini.layout(&ctx);
+        // Drawn again below, in the full layout.
+        self.scroll_panes.clear();
         // The strip's window is cut to the same corner as the artwork it frames; the
         // full window keeps its corners.
         crate::fullscreen::set_rounded((layout == mini::Layout::Mini).then(|| (theme::thumb_radius() + 1.0) * ctx.pixels_per_point()));
@@ -1330,30 +1339,33 @@ impl eframe::App for App {
             };
             // The sidebar first, so it runs the window's full height: the player floats
             // over the main section only, and the page content scrolls under it.
-            egui::Panel::left("nav").resizable(false)
+            let side = egui::Panel::left("nav").resizable(false)
                 .exact_size(shell::SIDEBAR_W - (shell::SIDEBAR_W - shell::RAIL_W) * shell::sidebar_collapse(self, &ctx))
                 .frame(side_frame)
                 .show_separator_line(false)
                 .show(ui, |ui| shell::sidebar(self, ui));
+            self.scroll_panes.push(side.response.rect);
             let section = ui.available_rect_before_wrap();
             let q = theme::anim_bool(&ctx, "queue-drawer", self.queue_open && !self.np_open, 0.25);
             if q > 0.01 {
-                egui::Panel::right("queue").resizable(false)
+                let r = egui::Panel::right("queue").resizable(false)
                     .exact_size(340.0 * q)
                     .frame(egui::Frame::new().fill(theme::panel(0.42)).inner_margin(egui::Margin::symmetric(14, 16)))
                     .show_separator_line(false)
                     .show(ui, |ui| shell::queue_drawer(self, ui));
+                self.scroll_panes.push(r.response.rect);
             }
             // Lyrics beside the pages; Up next takes the place when it's open.
             // It leaves the pages at least 480 points, and stays shut when that leaves it too narrow.
             let lyrics_w = (ui.available_rect_before_wrap().width() - 480.0).min(380.0);
             let l = theme::anim_bool(&ctx, "lyrics-drawer", self.lyrics_drawer && !self.queue_open && !self.np_open && lyrics_w >= 260.0, 0.25);
             if l > 0.01 {
-                egui::Panel::right("lyrics-drawer").resizable(false)
+                let r = egui::Panel::right("lyrics-drawer").resizable(false)
                     .exact_size(lyrics_w.max(260.0) * l)
                     .frame(egui::Frame::new().fill(theme::panel(0.5)).inner_margin(egui::Margin { left: 20, right: 16, top: 16, bottom: 16 }))
                     .show_separator_line(false)
                     .show(ui, |ui| nowplaying::lyrics_drawer(self, ui, now));
+                self.scroll_panes.push(r.response.rect);
             }
             let main_right = ui.available_rect_before_wrap().right();
             egui::CentralPanel::default()
@@ -1422,6 +1434,10 @@ impl eframe::App for App {
             } else if t < at {
                 ctx.request_repaint_after(Duration::from_millis(100));
             }
+        }
+        // Each gesture scrolls one pane along one axis: the page, not the sidebar too.
+        if !self.scroll_gesture.route(&mut raw.events, raw.time.unwrap_or(0.0), &self.scroll_panes) {
+            self.wheel_pending = egui::Vec2::ZERO;
         }
         smooth_wheel(self, ctx, raw);
         if let Some((x, y)) = dev_var("YTM_FAKE_POINTER").and_then(|v| {
