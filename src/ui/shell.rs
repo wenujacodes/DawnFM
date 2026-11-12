@@ -1181,19 +1181,19 @@ fn paint_mark(ui: &Ui, r: Rect) {
     mark(ui, r, Color32::from_white_alpha(170));
 }
 
-/// The BitChord mark, fitted inside `r`, tinted `tint`.
+/// The Dusk FM mark (a setting sun), fitted inside `r`, tinted `tint`.
 fn mark(ui: &Ui, r: Rect, tint: Color32) {
     const MARK: &[u8] = include_bytes!("../../assets/icon/mark.png");
     const W: f32 = 256.0;
     const H: f32 = 171.0;
-    let key = egui::Id::unique("bitchord-mark");
+    let key = egui::Id::unique("duskfm-mark");
     let tex = match ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(key)) {
         Some(t) => t,
         None => {
             let Ok(img) = image::load_from_memory(MARK) else { return };
             let img = img.into_rgba8();
             let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
-            let t = ui.ctx().load_texture("bitchord-mark", color, egui::TextureOptions::LINEAR);
+            let t = ui.ctx().load_texture("duskfm-mark", color, egui::TextureOptions::LINEAR);
             ui.ctx().data_mut(|d| d.insert_temp(key, t.clone()));
             t
         }
