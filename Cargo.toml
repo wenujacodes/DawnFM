@@ -71,3 +71,7 @@ panic = "unwind"
 [profile.dev.package."*"]
 opt-level = 2
 
+# egui with a smaller trackpad bounce at the ends of scrollers (see
+# vendor/egui/src/containers/scroll_physics.rs, the three "Dusk FM" constants).
+[patch.crates-io]
+egui = { path = "vendor/egui" }
