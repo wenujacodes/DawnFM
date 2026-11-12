@@ -456,6 +456,8 @@ pub struct App {
     np_open: bool,
     np_tab: NpTab,
     queue_open: bool,
+    /// The lyrics panel at the right of the pages (the player bar's lyrics button).
+    lyrics_drawer: bool,
     fullscreen: bool,
     /// The mini player: the window shrunk to a strip.
     mini: mini::Mini,
@@ -748,6 +750,7 @@ impl App {
             np_open: false,
             np_tab: if get("np_art").is_some_and(|v| v == "1") { NpTab::Art } else { NpTab::Lyrics },
             queue_open: false,
+            lyrics_drawer: get("lyrics_drawer").is_some_and(|v| v == "1"),
             fullscreen: false,
             mini: mini::Mini::load(get),
             lyrics: None,
@@ -1324,6 +1327,15 @@ impl eframe::App for App {
                     .show_separator_line(false)
                     .show(ui, |ui| shell::queue_drawer(self, ui));
             }
+            // Lyrics beside the pages; Up next takes the place when it's open.
+            let l = theme::anim_bool(&ctx, "lyrics-drawer", self.lyrics_drawer && !self.queue_open && !self.np_open, 0.25);
+            if l > 0.01 {
+                egui::Panel::right("lyrics-drawer").resizable(false)
+                    .exact_size(380.0 * l)
+                    .frame(egui::Frame::new().fill(theme::panel(0.5)).inner_margin(egui::Margin { left: 20, right: 16, top: 16, bottom: 16 }))
+                    .show_separator_line(false)
+                    .show(ui, |ui| nowplaying::lyrics_drawer(self, ui, now));
+            }
             let main_right = ui.available_rect_before_wrap().right();
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().inner_margin(egui::Margin { left: 28, right: 28, top: titlebar::top_margin(14, 42.0), bottom: 0 }))
@@ -1449,6 +1461,7 @@ impl eframe::App for App {
         }
         storage.set_string("close_to_tray", b(self.close_to_tray));
         storage.set_string("sidebar_collapsed", b(self.sidebar_collapsed));
+        storage.set_string("lyrics_drawer", b(self.lyrics_drawer));
         // The sidebar's playlist order, completed with any playlist that appeared since
         // it was last changed (so a drag can place them all).
         if let Some(l) = &self.library {

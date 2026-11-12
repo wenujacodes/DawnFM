@@ -1110,16 +1110,21 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         {
             app.actions.push(Action::Like(t, !liked));
         }
-        let lyrics_on = app.np_open && app.np_tab == NpTab::Lyrics && !app.no_lyrics();
+        let lyrics_on = if app.np_open { app.np_tab == NpTab::Lyrics && !app.no_lyrics() } else { app.lyrics_drawer && !app.queue_open };
         let r = rbtn(ui, 1, "lyrics", "Lyrics");
         let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.15);
         glyphs::draw(ui, r.rect.center(), 18.0, if lyrics_on { glyphs::LYRICS } else { glyphs::LYRICS_OFF }, if lyrics_on { accent } else { ink(h) });
         if r.clicked() {
-            if lyrics_on {
-                app.np_open = false;
+            if app.np_open {
+                if lyrics_on {
+                    app.np_open = false;
+                } else {
+                    app.np_tab = NpTab::Lyrics;
+                }
             } else {
-                app.np_tab = NpTab::Lyrics;
-                app.actions.push(Action::OpenNowPlaying(true));
+                // Beside the pages: the lyrics panel, in Up next's place.
+                app.lyrics_drawer = !lyrics_on;
+                app.queue_open = false;
             }
         }
         let queue_open = if app.np_open { app.np_tab == NpTab::UpNext } else { app.queue_open };
@@ -1131,6 +1136,9 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
                 app.np_tab = if queue_open { NpTab::Art } else { NpTab::UpNext };
             } else {
                 app.queue_open = !app.queue_open;
+                if app.queue_open {
+                    app.lyrics_drawer = false;
+                }
             }
         }
     } else {

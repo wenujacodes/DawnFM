@@ -525,6 +525,23 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
 
 // ------------------------------------------------------------------ lyrics
 
+/// The lyrics panel beside the pages: the playing song's lyrics, drawn dark like now
+/// playing whatever the pages' mode.
+pub(super) fn lyrics_drawer(app: &mut App, ui: &mut Ui, now: f64) {
+    let rect = ui.max_rect();
+    if app.current().is_none() {
+        ui.add_space(rect.height() * 0.4);
+        ui.vertical_centered(|ui| {
+            ui.label(egui::RichText::new("Play a song to see its lyrics").font(theme::semibold(16.0)).color(theme::text_dim()));
+        });
+        return;
+    }
+    let pages = theme::set_mode(ui.ctx(), false);
+    ui.set_clip_rect(rect);
+    lyrics_panel(app, ui, rect, now, false);
+    theme::set_mode(ui.ctx(), pages);
+}
+
 fn lyrics_panel(app: &mut App, ui: &mut Ui, rect: Rect, now: f64, centered: bool) {
     // Lent out for the frame rather than cloned (the drawing needs `app` mutably).
     let Some((id, set)) = app.lyrics.take() else {
