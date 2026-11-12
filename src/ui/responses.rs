@@ -127,7 +127,7 @@ impl App {
     /// A search's results are on screen: the first result clicked becomes what
     /// "Recently Searched" remembers, not the words that were typed.
     pub(super) fn expect_search_click(&mut self, query: &str) {
-        if matches!(&self.page, Page::Search(q) if q == query) {
+        if matches!(&self.page, Page::Search(q) if q == query) || self.search_drop.as_deref() == Some(query) {
             self.search_pending = true;
         }
     }
@@ -167,7 +167,7 @@ impl App {
 
     /// Record the thing the search's first click opened, once.
     pub(super) fn remember_search_click(&mut self, a: &Action) {
-        if !self.search_pending || !matches!(self.page, Page::Search(_)) {
+        if !self.search_pending || !(matches!(self.page, Page::Search(_)) || self.search_drop.is_some()) {
             return;
         }
         let Some(entry) = self.search_click_entry(a) else { return };

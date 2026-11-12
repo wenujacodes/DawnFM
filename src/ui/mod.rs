@@ -304,6 +304,8 @@ pub struct App {
     recent_searches: Vec<RecentSearch>,
     /// A search whose results are on screen, waiting for the first result to be opened.
     search_pending: bool,
+    /// The query whose results the search dropdown shows, while it's open.
+    search_drop: Option<String>,
     suggestions: (String, Vec<crate::ytm::Suggestion>),
     /// Up to 32 query results, oldest first, scoped to the current suggestion round.
     suggest_cache: VecDeque<(String, Vec<crate::ytm::Suggestion>)>,
@@ -622,6 +624,7 @@ impl App {
             search_synced: String::new(),
             recent_searches: get("recent_searches").and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
             search_pending: false,
+            search_drop: None,
             suggestions: Default::default(),
             suggest_cache: VecDeque::new(),
             suggest_sel: None,
@@ -834,6 +837,14 @@ impl App {
     // ---------------------------------------------------------------- navigation
 
     fn go(&mut self, page: Page) {
+        // Searches show in the sidebar's dropdown, not on a page. Choosing a Spotify
+        // transfer match still uses the search page to pick from.
+        if let Page::Search(q) = &page
+            && self.xfer.picking.is_none()
+        {
+            self.open_search(q.clone());
+            return;
+        }
         self.np_open = false;
         if page == self.page {
             // Clicking the page you're on refreshes it.
@@ -846,6 +857,26 @@ impl App {
         self.back.push(prev);
         self.forward.clear();
         self.page_loaded();
+    }
+
+    /// Show `q`'s results in the search dropdown (an empty query just focuses the box).
+    fn open_search(&mut self, q: String) {
+        let q = q.trim().to_owned();
+        self.np_open = false;
+        self.sidebar_collapsed = false;
+        self.search_text = q.clone();
+        self.suggestions = Default::default();
+        self.suggest_sel = None;
+        if q.is_empty() {
+            self.search_drop = None;
+            self.search_refocus = true;
+            return;
+        }
+        if self.search.as_ref().is_none_or(|s| s.query != q) {
+            self.backend.request(Req::Search(q.clone()));
+        }
+        self.search_pending = true;
+        self.search_drop = Some(q);
     }
 
     fn nav_back(&mut self) {
@@ -1246,6 +1277,8 @@ impl eframe::App for App {
             return;
         }
         shell::background(self, ui, screen, now, covered.then_some(bar_strip));
+        // Set again by the sidebar's search box when it's drawn this frame.
+        self.search_rect = None;
         if !self.fullscreen && !covered {
             // The top of the window, down to the search box's row: what's on it comes after.
             titlebar::drag_area(ui, egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), titlebar::HEIGHT)), "main");
@@ -1321,6 +1354,7 @@ impl eframe::App for App {
         notes::dialog(self, &ctx);
         if let Some(url) = self.share_pending.take() { ctx.copy_text(url); }
         shell::suggestions(self, &ctx);
+        shell::search_results(self, &ctx);
         shell::toast(self, &ctx, now);
 
         // The player keeps the window buttons too: the top right stays the window's.

@@ -235,7 +235,13 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     let p = app.page.clone();
     const APPLE: f32 = glyphs::APPLE_GLYPH;
     const LUCIDE: f32 = glyphs::LUCIDE_GLYPH;
-    nav(ui, glyphs::SEARCH, APPLE, "Search", Page::Search(String::new()), matches!(p, Page::Search(_)), &mut go_to);
+    // The search box, or on the collapsed rail its icon, which opens the sidebar to it.
+    if collapsed {
+        nav(ui, glyphs::SEARCH, APPLE, "Search", Page::Search(String::new()), false, &mut go_to);
+    } else {
+        search_field(app, ui, ui.available_width());
+        ui.add_space(8.0);
+    }
     nav(ui, glyphs::HOME, APPLE, "Home", Page::Home, p == Page::Home, &mut go_to);
     nav(ui, glyphs::EXPLORE, APPLE, "New", Page::New, p == Page::New, &mut go_to);
     nav(ui, glyphs::LIBRARY, APPLE, "Library", Page::Library(LibTab::Playlists), matches!(p, Page::Library(_)), &mut go_to);
@@ -425,10 +431,6 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
 // ------------------------------------------------------------------ top bar
 
 pub fn top_bar(app: &mut App, ui: &mut Ui) {
-    // The search field lives on the Search page: nothing here to anchor suggestions to.
-    // Its focus flag is left alone here: the page still has to see it before the box
-    // is drawn, or it would keep overwriting what's being typed with the page's query.
-    app.search_rect = None;
     // Painted over the panel's top-right rather than laid out: the page's heading can
     // then start on the title bar's line instead of under a row kept for the avatar.
     let panel = ui.max_rect();
@@ -509,7 +511,7 @@ pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
             app.suggestions = Default::default();
             app.suggest_sel = None;
             cleared = true;
-            app.actions.push(Action::Go(Page::Search(String::new())));
+            app.search_drop = None;
             edit.request_focus();
         }
     }
@@ -517,6 +519,10 @@ pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
         edit.request_focus();
     }
     if edit.changed() || edit.gained_focus() || cleared {
+        // Typing again swaps the results for suggestions.
+        if edit.changed() || cleared {
+            app.search_drop = None;
+        }
         app.suggest_sel = None;
         let now = ui.input(|i| i.time);
         // Show cached results immediately, then refresh after a short typing pause.
@@ -644,6 +650,101 @@ pub fn suggestions(app: &mut App, ctx: &egui::Context) {
                     }
                 });
         });
+}
+
+/// The search dropdown: the top songs, artists, albums and playlists for the query,
+/// under the search box. A click plays or opens one; Escape or a click elsewhere closes it.
+pub fn search_results(app: &mut App, ctx: &egui::Context) {
+    let (Some(rect), Some(q)) = (app.search_rect, app.search_drop.clone()) else { return };
+    if app.np_open || (app.search_focused && !app.suggestions.1.is_empty()) {
+        return;
+    }
+    let t = theme::anim_bool(ctx, "search-results-open", true, 0.15);
+    let width = rect.width().max(400.0);
+    let pos = rect.left_bottom() + vec2(0.0, 6.0 - 6.0 * (1.0 - t));
+    let mut close = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+    let mut act: Option<Action> = None;
+    let area = egui::Area::new(egui::Id::unique("search-results")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+        ui.set_opacity(t);
+        egui::Frame::new()
+            .fill(theme::menu_fill())
+            .corner_radius(14)
+            .inner_margin(8)
+            .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: theme::shade(0.5) })
+            .show(ui, |ui| {
+                ui.set_width(width - 16.0);
+                let Some(r) = app.search.as_ref().filter(|r| r.query == q) else {
+                    ui.horizontal(|ui| {
+                        ui.add_space(8.0);
+                        ui.spinner();
+                        ui.label(egui::RichText::new("Searching…").font(theme::regular(14.0)).color(theme::text_dim()));
+                    });
+                    ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+                    return;
+                };
+                if r.tracks.is_empty() && r.artists.is_empty() && r.albums.is_empty() && r.playlists.is_empty() {
+                    ui.label(egui::RichText::new("No results").font(theme::semibold(14.0)).color(theme::text_dim()));
+                    return;
+                }
+                egui::ScrollArea::vertical().max_height(520.0).auto_shrink([false, true]).show(ui, |ui| {
+                    let heading = |ui: &mut Ui, s: &str| {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new(s).font(theme::semibold(12.0)).color(theme::text_faint()));
+                        ui.add_space(2.0);
+                    };
+                    let row = |ui: &mut Ui, key: (&str, usize), title: &str, sub: &str, thumbs: &[crate::model::Thumb], round: bool| -> bool {
+                        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 48.0), Sense::click());
+                        let resp = named(resp, title).on_hover_cursor(egui::CursorIcon::PointingHand);
+                        let h = theme::anim_bool(ui.ctx(), ui.scope_id().with(("sr", key)), resp.hovered(), 0.1);
+                        ui.painter().rect_filled(r, 8.0, theme::glass(0.08 * h));
+                        let art = Rect::from_min_size(pos2(r.left() + 6.0, r.top() + 6.0), Vec2::splat(36.0));
+                        ui.painter().rect_filled(art, if round { 18.0 } else { 4.0 }, theme::glass(0.08));
+                        if let Some(th) = thumbs.iter().min_by_key(|t| (t.width as i64 - 120).abs()) {
+                            super::widgets::paint_remote(ui, &th.url, art, if round { 18.0 } else { 4.0 }, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+                        }
+                        let text_w = (r.right() - art.right() - 18.0).max(20.0);
+                        let line = |s: &str, font: egui::FontId, c: Color32| {
+                            let mut job = egui::text::LayoutJob::simple_singleline(s.to_owned(), font, c);
+                            job.wrap = egui::text::TextWrapping::truncate_at_width(text_w);
+                            ui.fonts_mut(|f| f.layout_job(job))
+                        };
+                        ui.painter().galley(pos2(art.right() + 12.0, r.top() + 7.0), line(title, theme::semibold(14.0), theme::text()), theme::text());
+                        ui.painter().galley(pos2(art.right() + 12.0, r.top() + 26.0), line(sub, theme::regular(12.5), theme::text_dim()), theme::text_dim());
+                        resp.clicked()
+                    };
+                    if !r.tracks.is_empty() {
+                        heading(ui, "SONGS");
+                        for (i, tr) in r.tracks.iter().take(5).enumerate() {
+                            if row(ui, ("song", i), &tr.title, &tr.artist_line(), &tr.thumbs, false) {
+                                act = Some(Action::Play(r.tracks.clone(), i));
+                            }
+                        }
+                    }
+                    for (label, cards) in [("ARTISTS", &r.artists), ("ALBUMS", &r.albums), ("PLAYLISTS", &r.playlists)] {
+                        if cards.is_empty() {
+                            continue;
+                        }
+                        heading(ui, label);
+                        for (i, c) in cards.iter().take(3).enumerate() {
+                            if row(ui, (label, i), &c.title, &c.subtitle, &c.thumbs, c.round) {
+                                act = Some(Action::Open(c.target.clone()));
+                            }
+                        }
+                    }
+                });
+            });
+    });
+    // A press outside both the box and the list closes it.
+    let outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !area.response.rect.contains(p) && !rect.contains(p)));
+    if let Some(a) = act {
+        // Remembered as a recent search while the dropdown still says what it was for.
+        app.remember_search_click(&a);
+        app.actions.push(a);
+        close = true;
+    }
+    if close || outside {
+        app.search_drop = None;
+    }
 }
 
 /// A suggestion with what's typed in bold and the rest dimmed, as on music.youtube.com.
