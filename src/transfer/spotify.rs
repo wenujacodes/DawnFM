@@ -477,17 +477,34 @@ impl std::error::Error for SignedOut {}
 /// The newest web-player TOTP secret, falling back to a known one.
 async fn totp_secret(http: &reqwest::Client) -> (u32, Vec<u8>) {
     let fetched = async {
-        let secrets: serde_json::Map<String, Value> =
-            http.get(SECRETS_URL).timeout(std::time::Duration::from_secs(5)).send().await?.error_for_status()?.json().await?;
-        let (version, list) = secrets
-            .iter()
-            .filter_map(|(k, v)| Some((k.parse::<u32>().ok()?, v.as_array()?)))
-            .max_by_key(|(k, _)| *k)
-            .ok_or_else(|| anyhow!("empty secrets list"))?;
-        let bytes = list.iter().map(|n| n.as_u64().map(|n| n as u8)).collect::<Option<Vec<u8>>>().context("bad secret")?;
-        Ok::<_, anyhow::Error>((version, bytes))
+        let secrets: Value = http.get(SECRETS_URL).timeout(std::time::Duration::from_secs(5)).send().await?.error_for_status()?.json().await?;
+        newest_secret(&secrets)
     };
-    fetched.await.unwrap_or_else(|_: anyhow::Error| (FALLBACK_SECRET.0, FALLBACK_SECRET.1.to_vec()))
+    let (version, secret) = match fetched.await {
+        // An older list than the built-in secret (stale or rolled back): keep the built-in one.
+        Ok((version, _)) if version < FALLBACK_SECRET.0 => {
+            log::info!("spotify: fetched secrets stop at version {version}; using built-in version {}", FALLBACK_SECRET.0);
+            (FALLBACK_SECRET.0, FALLBACK_SECRET.1.to_vec())
+        }
+        Ok(newest) => newest,
+        Err(e) => {
+            log::info!("spotify: secrets list unusable ({e:#}); using built-in version {}", FALLBACK_SECRET.0);
+            (FALLBACK_SECRET.0, FALLBACK_SECRET.1.to_vec())
+        }
+    };
+    log::info!("spotify: TOTP secret version {version}");
+    (version, secret)
+}
+
+/// The newest secret in a `{"<version>": [byte, …]}` list, if it looks like one:
+/// a numeric version and 10 to 64 values that are each a byte.
+fn newest_secret(secrets: &Value) -> Result<(u32, Vec<u8>)> {
+    let secrets = secrets.as_object().context("secrets list isn't an object")?;
+    let (version, list) = secrets.iter().filter_map(|(k, v)| Some((k.parse::<u32>().ok()?, v))).max_by_key(|(k, _)| *k).context("no numbered secrets")?;
+    let list = list.as_array().with_context(|| format!("secret {version} isn't a list"))?;
+    ensure!((10..=64).contains(&list.len()), "secret {version} has {} values", list.len());
+    let bytes = list.iter().map(|n| n.as_u64().and_then(|n| u8::try_from(n).ok())).collect::<Option<Vec<u8>>>().with_context(|| format!("secret {version} has a value that isn't a byte"))?;
+    Ok((version, bytes))
 }
 
 /// RFC 6238 TOTP (SHA-1, 30 s, 6 digits) over Spotify's obfuscated secret.
@@ -630,6 +647,24 @@ mod tests {
         // Computed independently with Python's hmac, the way pyotp derives it.
         assert_eq!(totp(FALLBACK_SECRET.1, 1_699_999_980), "371599");
         assert_eq!(totp(FALLBACK_SECRET.1, 1_700_000_009), "371599");
+    }
+
+    #[test]
+    fn secrets_list() {
+        let ok: Vec<u8> = (40..60).collect();
+        assert_eq!(newest_secret(&json!({ "59": vec![1; 12], "61": ok, "60": vec![2; 12] })).unwrap(), (61, ok.clone()));
+        // Non-numeric keys are ignored; the newest numbered one is used.
+        assert_eq!(newest_secret(&json!({ "latest": vec![3; 12], "61": ok })).unwrap().0, 61);
+        // The newest entry has to be valid itself.
+        assert!(newest_secret(&json!({ "61": ok, "62": [1, 2, 3] })).is_err());
+        assert!(newest_secret(&json!({ "62": vec![256; 12] })).is_err());
+        assert!(newest_secret(&json!({ "62": vec![-1; 12] })).is_err());
+        assert!(newest_secret(&json!({ "62": vec!["a"; 12] })).is_err());
+        assert!(newest_secret(&json!({ "62": vec![1; 65] })).is_err());
+        assert!(newest_secret(&json!({ "62": "abc" })).is_err());
+        assert!(newest_secret(&json!({})).is_err());
+        assert!(newest_secret(&json!([1, 2, 3])).is_err());
+        assert!(newest_secret(&json!({ "61": FALLBACK_SECRET.1 })).is_ok());
     }
 
     #[test]
