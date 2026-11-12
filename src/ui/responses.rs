@@ -1,5 +1,6 @@
 //! What the backend answers, applied to the app.
 
+use crate::sync::MutexExt;
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -15,7 +16,7 @@ use super::{Action, App, Dialog, HomeState, LibTab, MixFrom, Page, PlayingAs, Re
 
 impl App {
     pub(super) fn pump(&mut self, now: f64) {
-        let cover = self.media_cover.lock().unwrap().take();
+        let cover = self.media_cover.lock_unpoisoned().take();
         // The listed track's art, with what plays's title, artists and length.
         if let Some((id, file)) = cover
             && self.current().is_some_and(|t| t.id == id)

@@ -32,6 +32,7 @@ mod preset;
 mod shader;
 mod sponsorblock;
 mod stream;
+mod sync;
 mod theme;
 mod transfer;
 mod translate;

@@ -9,6 +9,7 @@
 //! On Linux the icon is a GTK one, and GTK runs its own loop on one thread for the
 //! life of the process (it can't be started twice); the icon is made and dropped there.
 
+use crate::sync::MutexExt;
 use std::sync::{Mutex, Once};
 
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
@@ -65,11 +66,11 @@ fn build(png: image::RgbaImage) -> anyhow::Result<TrayIcon> {
 }
 
 fn push(cmd: Cmd, wake: &impl Fn()) {
-    PENDING.lock().unwrap().push(cmd);
+    PENDING.lock_unpoisoned().push(cmd);
     wake();
 }
 
 /// Clicks since the last call.
 pub fn take() -> Vec<Cmd> {
-    std::mem::take(&mut *PENDING.lock().unwrap())
+    std::mem::take(&mut *PENDING.lock_unpoisoned())
 }

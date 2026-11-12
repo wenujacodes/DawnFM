@@ -1,5 +1,6 @@
 //! Discord, Last.fm, the system media controls, the app icon, updates and the tray.
 
+use crate::sync::MutexExt;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -55,7 +56,7 @@ impl App {
     /// Tell Last.fm what's playing, and scrobble it once it has played half its length
     /// or 4 minutes (songs under 30 s don't count). Runs every frame, like Discord's.
     pub(super) fn sync_lastfm(&mut self) {
-        let result = self.lastfm_result.lock().unwrap().take();
+        let result = self.lastfm_result.lock_unpoisoned().take();
         if let Some(r) = result {
             match r {
                 Ok(name) => {
@@ -129,7 +130,7 @@ impl App {
         let (busy, result, http, backend) = (self.lastfm_busy.clone(), self.lastfm_result.clone(), self.backend.http(), self.backend.clone());
         self.backend.spawn(async move {
             let r = crate::lastfm::sign_in(&http).await.map_err(|e| format!("{e:#}"));
-            *result.lock().unwrap() = Some(r);
+            *result.lock_unpoisoned() = Some(r);
             busy.store(false, Ordering::Relaxed);
             backend.wake();
         });
@@ -243,7 +244,7 @@ impl App {
             .await;
             match res {
                 Ok(path) => {
-                    *slot.lock().unwrap() = Some((video_id, format!("file://{}", path.display())));
+                    *slot.lock_unpoisoned() = Some((video_id, format!("file://{}", path.display())));
                     b.wake();
                 }
                 Err(e) => log::debug!("media cover: {e:#}"),

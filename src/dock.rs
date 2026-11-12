@@ -6,6 +6,7 @@
 //! object of ours; a click queues a `Cmd` here and wakes the UI, which drains the
 //! queue with `take()` (the same pattern as `tray.rs`).
 
+use crate::sync::MutexExt;
 use std::sync::Mutex;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,7 +33,7 @@ static STATE: Mutex<State> = Mutex::new(State { title: None, playing: false });
 /// Keep the menu in step with the player. Cheap enough to call every frame: it only
 /// copies the title when it changes.
 pub fn set_state(title: Option<&str>, playing: bool) {
-    let mut s = STATE.lock().unwrap();
+    let mut s = STATE.lock_unpoisoned();
     s.playing = playing;
     if s.title.as_deref() != title {
         s.title = title.map(str::to_owned);
@@ -40,15 +41,15 @@ pub fn set_state(title: Option<&str>, playing: bool) {
 }
 
 fn push(cmd: Cmd) {
-    PENDING.lock().unwrap().push(cmd);
-    if let Some(wake) = WAKE.lock().unwrap().as_ref() {
+    PENDING.lock_unpoisoned().push(cmd);
+    if let Some(wake) = WAKE.lock_unpoisoned().as_ref() {
         wake();
     }
 }
 
 /// Clicks since the last call, oldest first.
 pub fn take() -> Vec<Cmd> {
-    std::mem::take(&mut *PENDING.lock().unwrap())
+    std::mem::take(&mut *PENDING.lock_unpoisoned())
 }
 
 /// The Pause/Play item's title.
@@ -60,7 +61,7 @@ fn toggle_label(playing: bool) -> &'static str {
 /// main thread once the event loop has set up its application delegate (e.g. from the
 /// eframe app creator). Logs and carries on if anything is missing.
 pub fn install(wake: impl Fn() + Send + 'static) {
-    *WAKE.lock().unwrap() = Some(Box::new(wake));
+    *WAKE.lock_unpoisoned() = Some(Box::new(wake));
     mac::install();
 }
 
@@ -73,6 +74,7 @@ mod mac {
     use objc2_foundation::NSString;
 
     use super::Cmd;
+    use crate::sync::MutexExt;
 
     define_class!(
         // SAFETY: a plain NSObject subclass with no ivars and no Drop.
@@ -115,7 +117,7 @@ mod mac {
         }
         // SAFETY: `target` was leaked in `install` and lives for the whole run.
         let target: &Target = unsafe { &*target };
-        let state = super::STATE.lock().unwrap().clone();
+        let state = super::STATE.lock_unpoisoned().clone();
         // SAFETY: AppKit calls this on the main thread. Plain NSMenu/NSMenuItem calls
         // with the types they take; the menu is returned autoreleased (a getter's +0).
         unsafe {
@@ -202,9 +204,9 @@ mod tests {
     #[test]
     fn state_and_clicks() {
         set_state(Some("Song"), true);
-        assert_eq!(*STATE.lock().unwrap(), State { title: Some("Song".into()), playing: true });
+        assert_eq!(*STATE.lock_unpoisoned(), State { title: Some("Song".into()), playing: true });
         set_state(None, false);
-        assert_eq!(*STATE.lock().unwrap(), State::default());
+        assert_eq!(*STATE.lock_unpoisoned(), State::default());
         assert_eq!(toggle_label(true), "Pause");
         assert_eq!(toggle_label(false), "Play");
 

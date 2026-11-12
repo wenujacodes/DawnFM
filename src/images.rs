@@ -3,6 +3,7 @@
 //!
 //! Reusing the backend's reqwest client avoids a second HTTP/TLS stack in the binary.
 
+use crate::sync::MutexExt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -84,7 +85,7 @@ impl BytesLoader for HttpImages {
         if !is_http(uri) {
             return Err(LoadError::NotSupported);
         }
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock_unpoisoned();
         match cache.get(uri) {
             Some(Entry::Ready(bytes, mime)) => {
                 return Ok(BytesPoll::Ready {
@@ -107,7 +108,7 @@ impl BytesLoader for HttpImages {
             if let Ok(bytes) = std::fs::read(&file) {
                 // Touch it, so trimming drops pictures that aren't used any more.
                 let _ = std::fs::File::options().write(true).open(&file).and_then(|f| f.set_modified(std::time::SystemTime::now()));
-                if let Some(slot) = cache.lock().unwrap().get_mut(&uri) {
+                if let Some(slot) = cache.lock_unpoisoned().get_mut(&uri) {
                     *slot = Entry::Ready(Arc::from(bytes), None);
                 }
                 backend.wake();
@@ -133,7 +134,7 @@ impl BytesLoader for HttpImages {
                 Err(e) => Entry::Failed(e.to_string(), Instant::now()),
             };
             // Only store if not forgotten while in flight.
-            if let Some(slot) = cache.lock().unwrap().get_mut(&uri) {
+            if let Some(slot) = cache.lock_unpoisoned().get_mut(&uri) {
                 *slot = entry;
             }
             backend.wake();
@@ -142,17 +143,16 @@ impl BytesLoader for HttpImages {
     }
 
     fn forget(&self, uri: &str) {
-        self.cache.lock().unwrap().remove(uri);
+        self.cache.lock_unpoisoned().remove(uri);
     }
 
     fn forget_all(&self) {
-        self.cache.lock().unwrap().clear();
+        self.cache.lock_unpoisoned().clear();
     }
 
     fn byte_size(&self) -> usize {
         self.cache
-            .lock()
-            .unwrap()
+            .lock_unpoisoned()
             .values()
             .map(|e| match e {
                 Entry::Ready(b, _) => b.len(),
@@ -162,7 +162,7 @@ impl BytesLoader for HttpImages {
     }
 
     fn has_pending(&self) -> bool {
-        self.cache.lock().unwrap().values().any(|e| matches!(e, Entry::Pending))
+        self.cache.lock_unpoisoned().values().any(|e| matches!(e, Entry::Pending))
     }
 }
 
@@ -204,7 +204,7 @@ impl TextureLoader for Textures {
             return Err(LoadError::NotSupported);
         }
         {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock_unpoisoned();
             let pass = state.pass;
             if let Some(t) = state.cache.get_mut(uri).filter(|t| t.options == options) {
                 t.last_used = pass;
@@ -224,7 +224,7 @@ impl TextureLoader for Textures {
                 for l in loaders.image.lock().iter() {
                     l.forget(uri);
                 }
-                let mut state = self.state.lock().unwrap();
+                let mut state = self.state.lock_unpoisoned();
                 let last_used = state.pass;
                 state.cache.insert(uri.to_owned(), Texture { handle, options, size, last_used });
                 Ok(TexturePoll::Ready { texture })
@@ -233,15 +233,15 @@ impl TextureLoader for Textures {
     }
 
     fn forget(&self, uri: &str) {
-        self.state.lock().unwrap().cache.remove(uri);
+        self.state.lock_unpoisoned().cache.remove(uri);
     }
 
     fn forget_all(&self) {
-        self.state.lock().unwrap().cache.clear();
+        self.state.lock_unpoisoned().cache.clear();
     }
 
     fn end_pass(&self, pass_index: u64) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock_unpoisoned();
         state.pass = pass_index;
         let mut total = state.cache.values().map(|t| t.handle.byte_size()).sum::<usize>();
         if total <= TEXTURE_BUDGET {
@@ -261,6 +261,6 @@ impl TextureLoader for Textures {
     }
 
     fn byte_size(&self) -> usize {
-        self.state.lock().unwrap().cache.values().map(|t| t.handle.byte_size()).sum()
+        self.state.lock_unpoisoned().cache.values().map(|t| t.handle.byte_size()).sum()
     }
 }

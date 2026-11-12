@@ -28,6 +28,7 @@ pub use titlebar::custom as custom_titlebar;
 mod transfer;
 mod widgets;
 
+use crate::sync::MutexExt;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -818,7 +819,7 @@ impl App {
         }
         // YTM_UPLOAD=<file> uploads that file as if it had been picked.
         if let Some(f) = std::env::var_os("YTM_UPLOAD") {
-            *app.picked_uploads.lock().unwrap() = Some(vec![f.into()]);
+            *app.picked_uploads.lock_unpoisoned() = Some(vec![f.into()]);
         }
         // Dev hook: YTM_PROXY_INPUT=<address> opens Settings › Network on Custom with it typed in.
         if let Some(v) = dev_var("YTM_PROXY_INPUT") {
@@ -1148,7 +1149,7 @@ impl eframe::App for App {
         }
         self.request_lyric_extras();
         // Upload: files from the picker, or dropped onto the window.
-        let mut files = self.picked_uploads.lock().unwrap().take().unwrap_or_default();
+        let mut files = self.picked_uploads.lock_unpoisoned().take().unwrap_or_default();
         files.extend(ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_owned()).filter(|p| !p.as_os_str().is_empty()).collect::<Vec<_>>()));
         if !files.is_empty() {
             self.upload_files(files);

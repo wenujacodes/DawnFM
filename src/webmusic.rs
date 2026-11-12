@@ -6,6 +6,7 @@
 //! otherwise googlevideo cuts the stream off after about 1 MiB.
 //! Mirrors yt-dlp's `web_music` client; update together if YouTube changes it.
 
+use crate::sync::MutexExt;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -232,14 +233,14 @@ impl Session {
 
     /// The `Set-Cookie` lines collected since the last call.
     pub fn take_replaced(&self) -> Vec<String> {
-        std::mem::take(&mut *self.replaced.lock().unwrap())
+        std::mem::take(&mut *self.replaced.lock_unpoisoned())
     }
 
     /// Note a response's `Set-Cookie` lines for the API to take in.
     pub fn note_replaced(&self, headers: &reqwest::header::HeaderMap) {
         let lines: Vec<String> = headers.get_all("set-cookie").iter().filter_map(|c| c.to_str().ok().map(str::to_owned)).collect();
         if !lines.is_empty() {
-            self.replaced.lock().unwrap().extend(lines);
+            self.replaced.lock_unpoisoned().extend(lines);
         }
     }
 

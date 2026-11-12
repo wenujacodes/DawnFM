@@ -8,6 +8,7 @@
 
 pub mod spotify;
 
+use crate::sync::MutexExt;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -255,7 +256,7 @@ impl Transfer {
             data_dir: data_dir.to_owned(),
             wake,
         });
-        *this.resumable.lock().unwrap() = this.find_resumable();
+        *this.resumable.lock_unpoisoned() = this.find_resumable();
         this
     }
 
@@ -281,7 +282,7 @@ impl Transfer {
     }
 
     pub fn running(&self) -> bool {
-        self.job.lock().unwrap().as_ref().is_some_and(|j| j.phase.running())
+        self.job.lock_unpoisoned().as_ref().is_some_and(|j| j.phase.running())
     }
 
     /// Sign the Spotify side in or out; `None` signs out.
@@ -289,7 +290,7 @@ impl Transfer {
         match sp_dc {
             Some(c) => {
                 if let Err(e) = crate::vault::set(VAULT, &self.data_dir, c.as_bytes()) {
-                    *self.account.lock().unwrap() = Account::Failed(format!("Couldn't save the Spotify sign-in: {e}"));
+                    *self.account.lock_unpoisoned() = Account::Failed(format!("Couldn't save the Spotify sign-in: {e}"));
                     return;
                 }
                 self.load_account(rt);
@@ -298,7 +299,7 @@ impl Transfer {
                 self.account_gen.fetch_add(1, Ordering::Relaxed);
                 crate::vault::delete(VAULT, &self.data_dir);
                 crate::login::forget(&self.spotify_profile());
-                *self.account.lock().unwrap() = Account::SignedOut;
+                *self.account.lock_unpoisoned() = Account::SignedOut;
             }
         }
     }
@@ -315,10 +316,10 @@ impl Transfer {
     /// Read the signed-in Spotify account and its playlists.
     pub fn load_account(self: &Arc<Self>, rt: &crate::backend::Backend) {
         let Some(cookie) = self.cookie() else {
-            *self.account.lock().unwrap() = Account::SignedOut;
+            *self.account.lock_unpoisoned() = Account::SignedOut;
             return;
         };
-        *self.account.lock().unwrap() = Account::Loading;
+        *self.account.lock_unpoisoned() = Account::Loading;
         let generation = self.account_gen.fetch_add(1, Ordering::Relaxed) + 1;
         let this = self.clone();
         rt.spawn(async move {
@@ -327,7 +328,7 @@ impl Transfer {
                 client.account().await
             }
             .await;
-            let mut account = this.account.lock().unwrap();
+            let mut account = this.account.lock_unpoisoned();
             if this.account_gen.load(Ordering::Relaxed) != generation {
                 return; // signed out or in again meanwhile
             }
@@ -349,7 +350,7 @@ impl Transfer {
 
     /// Read the account the first time something shows it.
     pub fn ensure_account(self: &Arc<Self>, rt: &crate::backend::Backend) {
-        if matches!(*self.account.lock().unwrap(), Account::Unknown) {
+        if matches!(*self.account.lock_unpoisoned(), Account::Unknown) {
             self.load_account(rt);
         }
     }
@@ -358,7 +359,7 @@ impl Transfer {
     pub fn look_up(self: &Arc<Self>, rt: &crate::backend::Backend, link: &str) {
         let link = link.trim().to_owned();
         {
-            let mut slot = self.lookup.lock().unwrap();
+            let mut slot = self.lookup.lock_unpoisoned();
             if slot.as_ref().is_some_and(|(l, _)| *l == link) {
                 return;
             }
@@ -385,7 +386,7 @@ impl Transfer {
             }
             .await
             .map_err(|e| e.to_string());
-            let mut slot = this.lookup.lock().unwrap();
+            let mut slot = this.lookup.lock_unpoisoned();
             if slot.as_ref().is_some_and(|(l, _)| *l == link) {
                 *slot = Some((link, Some(res)));
             }
@@ -395,7 +396,7 @@ impl Transfer {
     }
 
     pub fn set_paused(&self, paused: bool) {
-        if let Some(j) = self.job.lock().unwrap().as_mut() {
+        if let Some(j) = self.job.lock_unpoisoned().as_mut() {
             j.paused = paused;
         }
     }
@@ -408,7 +409,7 @@ impl Transfer {
 
     /// Close a finished or failed transfer, back to the start screen.
     pub fn dismiss(&self) {
-        let mut job = self.job.lock().unwrap();
+        let mut job = self.job.lock_unpoisoned();
         if job.as_ref().is_some_and(|j| !j.phase.running()) {
             *job = None;
         }
@@ -416,7 +417,7 @@ impl Transfer {
 
     /// Record a review decision for the current doubt.
     pub fn decide(&self, doubt: usize, decision: Decision) {
-        let mut guard = self.job.lock().unwrap();
+        let mut guard = self.job.lock_unpoisoned();
         let Some(job) = guard.as_mut() else { return };
         if let Some(d) = job.doubts.get_mut(doubt) {
             d.decision = Some(decision);
@@ -430,7 +431,7 @@ impl Transfer {
     /// the candidates and is picked.
     pub fn decide_with(&self, doubt: usize, track: YtTrack) {
         {
-            let mut guard = self.job.lock().unwrap();
+            let mut guard = self.job.lock_unpoisoned();
             let Some(job) = guard.as_mut().filter(|j| j.phase == Phase::Review) else { return };
             let Some(d) = job.doubts.get_mut(doubt) else { return };
             let k = match d.candidates.iter().position(|c| c.id == track.id) {
@@ -456,7 +457,7 @@ impl Transfer {
     /// in the review.
     pub fn edit_match(self: &Arc<Self>, rt: &crate::backend::Backend, index: usize) -> Option<usize> {
         let track = {
-            let mut guard = self.job.lock().unwrap();
+            let mut guard = self.job.lock_unpoisoned();
             let job = guard.as_mut()?;
             if let Some(k) = job.doubts.iter().position(|d| d.index == index) {
                 return Some(k);
@@ -467,7 +468,7 @@ impl Transfer {
         let (this, api) = (self.clone(), rt.api());
         rt.spawn(async move {
             let found = candidates(&api, &track).await.unwrap_or_default();
-            if let Some(job) = this.job.lock().unwrap().as_mut()
+            if let Some(job) = this.job.lock_unpoisoned().as_mut()
                 && let Some(d) = job.doubts.iter_mut().find(|d| d.index == index)
             {
                 (d.candidates, d.videos) = found.into_iter().unzip();
@@ -475,12 +476,12 @@ impl Transfer {
             }
             this.wake();
         });
-        Some(self.job.lock().unwrap().as_ref()?.doubts.len() - 1)
+        Some(self.job.lock_unpoisoned().as_ref()?.doubts.len() - 1)
     }
 
     /// Keep the current picks for every song not reviewed yet.
     pub fn finish_review(&self) {
-        let mut guard = self.job.lock().unwrap();
+        let mut guard = self.job.lock_unpoisoned();
         let Some(job) = guard.as_mut() else { return };
         for d in &mut job.doubts {
             d.decision.get_or_insert(Decision::Keep);
@@ -498,8 +499,8 @@ impl Transfer {
             self.forget(&source);
         }
         self.cancel.store(false, Ordering::Relaxed);
-        *self.resumable.lock().unwrap() = None;
-        *self.job.lock().unwrap() = Some(Job {
+        *self.resumable.lock_unpoisoned() = None;
+        *self.job.lock_unpoisoned() = Some(Job {
             name: String::new(),
             source: source.clone(),
             dest,
@@ -523,10 +524,10 @@ impl Transfer {
             reviewed: false,
         });
         let (this, api) = (self.clone(), rt.api());
-        *self.pinned.lock().unwrap() = Some((api.clone(), api.epoch()));
+        *self.pinned.lock_unpoisoned() = Some((api.clone(), api.epoch()));
         rt.spawn(async move {
             let res = this.run(&api).await;
-            let mut guard = this.job.lock().unwrap();
+            let mut guard = this.job.lock_unpoisoned();
             if let Some(job) = guard.as_mut() {
                 match res {
                     Ok(()) => {}
@@ -539,7 +540,7 @@ impl Transfer {
                         let saved = !job.tracks.is_empty();
                         job.phase = Phase::Failed(if saved { format!("{e}. Your progress is saved; try again to pick up where it stopped.") } else { e.to_string() });
                         drop(guard);
-                        *this.resumable.lock().unwrap() = this.find_resumable();
+                        *this.resumable.lock_unpoisoned() = this.find_resumable();
                     }
                 }
             }
@@ -558,12 +559,12 @@ impl Transfer {
     /// Throw away a stopped transfer's progress.
     pub fn discard_saved(&self, source: &Source) {
         self.forget(source);
-        *self.resumable.lock().unwrap() = self.find_resumable();
+        *self.resumable.lock_unpoisoned() = self.find_resumable();
     }
 
     fn save(&self) {
         let saved = {
-            let guard = self.job.lock().unwrap();
+            let guard = self.job.lock_unpoisoned();
             let Some(j) = guard.as_ref() else { return };
             if j.tracks.is_empty() {
                 return;
@@ -601,7 +602,7 @@ impl Transfer {
     }
 
     fn with_job<R>(&self, f: impl FnOnce(&mut Job) -> R) -> R {
-        f(self.job.lock().unwrap().as_mut().expect("transfer job"))
+        f(self.job.lock_unpoisoned().as_mut().expect("transfer job"))
     }
 
     /// Cancelled: stop. Paused: wait here.
@@ -611,7 +612,7 @@ impl Transfer {
                 bail!("cancelled");
             }
             // The rest would go to another account or channel than the part done.
-            if self.pinned.lock().unwrap().as_ref().is_some_and(|(api, epoch)| api.epoch() != *epoch) {
+            if self.pinned.lock_unpoisoned().as_ref().is_some_and(|(api, epoch)| api.epoch() != *epoch) {
                 bail!("Stopped: the YouTube Music account or channel changed");
             }
             if !self.with_job(|j| j.paused) {

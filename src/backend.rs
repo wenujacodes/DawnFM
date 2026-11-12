@@ -4,6 +4,7 @@
 //! Playback resolution also lives here: resolve stream → start progressive download →
 //! build the decoder on a blocking thread → hand it to the audio engine.
 
+use crate::sync::{MutexExt, RwLockExt};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -957,18 +958,18 @@ impl Backend {
         let meta = song.clone().or_else(|| song_of.clone()).or_else(|| track);
         let video_id = song.map_or(video_id, |s| s.id);
         // Let the playing song finish downloading first: it gets the whole bandwidth.
-        let playing = self.current.lock().unwrap().as_ref().map(|(_, s)| s.clone());
+        let playing = self.current.lock_unpoisoned().as_ref().map(|(_, s)| s.clone());
         if let Some(s) = playing {
             s.finished().await;
         }
         if self.audio.status.wanted_gen.load(Ordering::Relaxed) != generation
-            || self.prefetched.lock().unwrap().as_ref().is_some_and(|(id, _)| *id == video_id)
+            || self.prefetched.lock_unpoisoned().as_ref().is_some_and(|(id, _)| *id == video_id)
         {
             return Ok(());
         }
         log::debug!("prefetch {video_id}");
         let shared = self.open_stream(&video_id, true, meta.as_ref()).await?;
-        if let Some((_, old)) = self.prefetched.lock().unwrap().replace((video_id, shared)) {
+        if let Some((_, old)) = self.prefetched.lock_unpoisoned().replace((video_id, shared)) {
             old.cancel();
         }
         Ok(())
@@ -1003,7 +1004,7 @@ impl Backend {
     /// counts too: starting a song clears it, and a restored session sets it.
     async fn stream_duration(&self, video_id: &str) -> Option<u32> {
         for _ in 0..150 {
-            let ms = self.current.lock().unwrap().as_ref().filter(|(id, _)| id == video_id).map(|(_, s)| s.duration_ms);
+            let ms = self.current.lock_unpoisoned().as_ref().filter(|(id, _)| id == video_id).map(|(_, s)| s.duration_ms);
             let ms = ms.filter(|ms| *ms > 0).or_else(|| self.audio.status.duration().map(|d| d.as_millis() as u64));
             if let Some(ms) = ms.filter(|ms| *ms > 0) {
                 return Some((ms / 1000) as u32);
@@ -1048,15 +1049,15 @@ impl Backend {
             return Ok(());
         }
         let mut video_id = song.as_ref().map_or(listed, |s| s.id.as_str()).to_owned();
-        let prefetched = self.prefetched.lock().unwrap().take();
+        let prefetched = self.prefetched.lock_unpoisoned().take();
         // A reverted song must not replay its buffered hi-res copy: it re-resolves to YouTube.
-        let reverted = self.reverted.lock().unwrap().contains(&video_id);
-        let replay = self.current.lock().unwrap().take().filter(|(id, s)| !reverted && *id == video_id && s.is_complete()).map(|(_, s)| s);
+        let reverted = self.reverted.lock_unpoisoned().contains(&video_id);
+        let replay = self.current.lock_unpoisoned().take().filter(|(id, s)| !reverted && *id == video_id && s.is_complete()).map(|(_, s)| s);
         let ready = match prefetched {
             Some((id, s)) if id == video_id => Some(s),
             // Replaying the current song keeps the next one's prefetch.
             other if replay.is_some() => {
-                *self.prefetched.lock().unwrap() = other;
+                *self.prefetched.lock_unpoisoned() = other;
                 replay
             }
             // Playback went elsewhere: that prefetch is moot.
@@ -1103,7 +1104,7 @@ impl Backend {
             }
         }
         let video_id = video_id.as_str();
-        *self.current.lock().unwrap() = Some((video_id.to_owned(), shared.clone()));
+        *self.current.lock_unpoisoned() = Some((video_id.to_owned(), shared.clone()));
         log::debug!("play {video_id} (gen {generation}): stream open in {:?}", t0.elapsed());
         if self.audio.status.wanted_gen.load(Ordering::Relaxed) != generation {
             shared.cancel();
@@ -1252,7 +1253,7 @@ impl Backend {
             return None;
         }
         let cell = {
-            let mut songs = self.songs.lock().unwrap();
+            let mut songs = self.songs.lock_unpoisoned();
             let key = format!("{listed} {premium}");
             match songs.get(&key) {
                 Some(cell) => cell.clone(),
@@ -1370,8 +1371,8 @@ impl Backend {
     /// addon source first (playback only).
     async fn resolve(&self, video_id: &str, best: bool, track: Option<&Track>, allow_hires: bool) -> anyhow::Result<(Source, ResolvedStream)> {
         // The listener's addons answer for the songs they have; when they miss, YouTube plays.
-        let reverted = self.reverted.lock().unwrap().contains(video_id);
-        let hires = if allow_hires && !reverted { self.hires.read().unwrap().clone() } else { Vec::new() };
+        let reverted = self.reverted.lock_unpoisoned().contains(video_id);
+        let hires = if allow_hires && !reverted { self.hires.read_unpoisoned().clone() } else { Vec::new() };
         if let Some(track) = track
             && !hires.is_empty()
         {
@@ -1464,7 +1465,7 @@ impl Backend {
             }
             Source::HiRes => {
                 let track = track.ok_or_else(|| anyhow::anyhow!("no song to look up"))?;
-                let sources = self.hires.read().unwrap().clone();
+                let sources = self.hires.read_unpoisoned().clone();
                 anyhow::ensure!(!sources.is_empty(), "no hi-res source is set");
                 self.from_hires(&sources, track).await.ok_or_else(|| anyhow::anyhow!("no hi-res source has a copy"))?
             }
@@ -1591,12 +1592,12 @@ impl Backend {
 
     /// Send a song back to YouTube audio: later plays of it skip the hi-res sources.
     pub fn revert_quality(&self, video_id: &str) {
-        self.reverted.lock().unwrap().insert(video_id.to_owned());
+        self.reverted.lock_unpoisoned().insert(video_id.to_owned());
     }
 
     /// Allow hi-res sources again for a song that was sent back to YouTube audio.
     pub fn upgrade_quality(&self, video_id: &str) {
-        self.reverted.lock().unwrap().remove(video_id);
+        self.reverted.lock_unpoisoned().remove(video_id);
     }
 
     /// Point the hi-res sources at the links in `links`, one per line (empty: none). The
@@ -1625,7 +1626,7 @@ impl Backend {
         if rejected > 0 && !clients.is_empty() {
             log::warn!("hi-res sources: {rejected} entry(s) aren't http(s) links and were skipped");
         }
-        *self.hires.write().unwrap() = clients;
+        *self.hires.write_unpoisoned() = clients;
     }
 
     /// Like or unlike a selection, one at a time, then check Liked Music and try again

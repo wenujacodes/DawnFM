@@ -1,5 +1,6 @@
 //! Page bodies. Every page fades and slides in when navigated to.
 
+use crate::sync::MutexExt;
 use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 
@@ -1697,7 +1698,7 @@ fn network(app: &mut App, ui: &mut Ui) {
     });
     if let Some(s) = pick {
         app.proxy_error = None;
-        *app.proxy_test.lock().unwrap() = None;
+        *app.proxy_test.lock_unpoisoned() = None;
         app.proxy_mode = s.clone();
         // System and Off take effect as picked; a custom address once it's saved.
         if !matches!(s, Setting::Custom(_)) {
@@ -1747,7 +1748,7 @@ fn network(app: &mut App, ui: &mut Ui) {
         ui.add_space(8.0);
     }
     divider(ui);
-    let result = app.proxy_test.lock().unwrap().clone();
+    let result = app.proxy_test.lock_unpoisoned().clone();
     let desc = match &result {
         Some(Some((_, msg))) => msg.clone(),
         Some(None) => "Checking…".to_owned(),
@@ -1762,13 +1763,13 @@ fn network(app: &mut App, ui: &mut Ui) {
                 other => other.clone(),
             };
             let (slot, b) = (app.proxy_test.clone(), app.backend.clone());
-            *slot.lock().unwrap() = Some(None);
+            *slot.lock_unpoisoned() = Some(None);
             app.backend.spawn(async move {
                 let out = match proxy::test(&s).await {
                     Ok(t) => (true, format!("Working: YouTube Music answered in {} ms.", t.as_millis())),
                     Err(e) => (false, format!("Didn't connect: {e:#}")),
                 };
-                *slot.lock().unwrap() = Some(Some(out));
+                *slot.lock_unpoisoned() = Some(Some(out));
                 b.wake();
             });
         }

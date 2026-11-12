@@ -1,5 +1,6 @@
 //! Visual design tokens: fonts, icons, colours, motion.
 
+use crate::sync::{MutexExt, RwLockExt};
 use std::sync::Arc;
 
 use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId};
@@ -142,7 +143,7 @@ impl Appearance {
 fn system_light() -> Option<bool> {
     use std::time::{Duration, Instant};
     static MODE: std::sync::Mutex<Option<(Instant, Option<bool>)>> = std::sync::Mutex::new(None);
-    let mut cached = MODE.lock().unwrap();
+    let mut cached = MODE.lock_unpoisoned();
     match *cached {
         Some((at, m)) if at.elapsed() < Duration::from_secs(2) => m,
         _ => {
@@ -164,7 +165,7 @@ fn read_system_light() -> Option<bool> {
 pub fn system_accent() -> Option<Color32> {
     use std::time::{Duration, Instant};
     static ACCENT: std::sync::Mutex<Option<(Instant, Option<Color32>)>> = std::sync::Mutex::new(None);
-    let mut cached = ACCENT.lock().unwrap();
+    let mut cached = ACCENT.lock_unpoisoned();
     match *cached {
         Some((at, c)) if at.elapsed() < Duration::from_secs(2) => c,
         _ => {
@@ -405,16 +406,16 @@ impl Face {
 }
 
 pub fn set_font_choice(name: &str) {
-    *FONT_CHOICE.write().unwrap() = name.to_owned();
+    *FONT_CHOICE.write_unpoisoned() = name.to_owned();
 }
 
 pub fn font_choice() -> String {
-    FONT_CHOICE.read().unwrap().clone()
+    FONT_CHOICE.read_unpoisoned().clone()
 }
 
 /// The font name to draw with where a theme asks for `theme_font`.
 pub fn effective_font(theme_font: &str) -> String {
-    let choice = FONT_CHOICE.read().unwrap();
+    let choice = FONT_CHOICE.read_unpoisoned();
     if choice.is_empty() { theme_font.to_owned() } else { choice.clone() }
 }
 
@@ -425,7 +426,7 @@ fn font_key(name: &str) -> &'static str {
     if let Some(k) = lyric_key(&name) {
         return k;
     }
-    if CHOICE.read().unwrap().as_ref().is_some_and(|c| c.name.eq_ignore_ascii_case(&name)) { "choice" } else { "inter" }
+    if CHOICE.read_unpoisoned().as_ref().is_some_and(|c| c.name.eq_ignore_ascii_case(&name)) { "choice" } else { "inter" }
 }
 
 fn family(key: &str, weight: crate::preset::Weight, size: f32) -> FontId {
@@ -455,7 +456,7 @@ pub fn lyric_font_for(name: &str, weight: crate::preset::Weight, size: f32, text
 fn lacks_letters(key: &str, text: &str) -> bool {
     use skrifa::MetadataProvider;
     let face = match key {
-        "choice" => match CHOICE.read().unwrap().as_ref() {
+        "choice" => match CHOICE.read_unpoisoned().as_ref() {
             Some(c) => c.faces[0],
             None => return false,
         },
@@ -581,10 +582,10 @@ fn choose_faces(family: &SysFamily) -> Option<[Face; 3]> {
 fn load_choice(ui_font: &str) {
     let name = effective_font(ui_font);
     if name.is_empty() || lyric_key(&name).is_some() || name.eq_ignore_ascii_case("inter") {
-        *CHOICE.write().unwrap() = None;
+        *CHOICE.write_unpoisoned() = None;
         return;
     }
-    if CHOICE.read().unwrap().as_ref().is_some_and(|c| c.name == name) {
+    if CHOICE.read_unpoisoned().as_ref().is_some_and(|c| c.name == name) {
         return;
     }
     // Only when an installed font is set: a one-off scan, the first time.
@@ -593,7 +594,7 @@ fn load_choice(ui_font: &str) {
     if faces.is_none() {
         log::warn!("font {name:?} isn't installed; using Inter");
     }
-    *CHOICE.write().unwrap() = faces.map(|faces| Chosen { name, faces });
+    *CHOICE.write_unpoisoned() = faces.map(|faces| Chosen { name, faces });
 }
 
 // System fallbacks: egui's fonts cover Latin only, so CJK, Arabic, Indic, Thai,
@@ -642,10 +643,10 @@ pub fn install_fonts(ctx: &egui::Context, ui_font: &str) {
     let ui_key = font_key(ui_font);
     // Installing rebuilds the font atlas; most themes share a UI font, so skip repeats.
     static INSTALLED: std::sync::Mutex<Option<(&'static str, String)>> = std::sync::Mutex::new(None);
-    let loaded = CHOICE.read().unwrap().as_ref().map(|c| c.name.clone()).unwrap_or_default();
+    let loaded = CHOICE.read_unpoisoned().as_ref().map(|c| c.name.clone()).unwrap_or_default();
     let state = Some((ui_key, loaded));
     {
-        let mut installed = INSTALLED.lock().unwrap();
+        let mut installed = INSTALLED.lock_unpoisoned();
         if *installed == state {
             return;
         }
@@ -673,7 +674,7 @@ pub fn install_fonts(ctx: &egui::Context, ui_font: &str) {
         })
     });
     // Primary fonts: Inter, each lyric font, and the installed font picked in Settings.
-    let choice = CHOICE.read().unwrap().as_ref().map(|c| c.faces);
+    let choice = CHOICE.read_unpoisoned().as_ref().map(|c| c.faces);
     let mut groups: Vec<(&str, [Face; 3])> = vec![("inter", INTER.map(Face::of))];
     groups.extend(LYRIC_FONTS.iter().map(|(k, w)| (*k, w.map(Face::of))));
     groups.extend(choice.map(|faces| ("choice", faces)));
@@ -735,7 +736,7 @@ pub fn install_fonts(ctx: &egui::Context, ui_font: &str) {
 fn shared_bytes(blob: &egui::epaint::text::Blob) -> egui::epaint::text::Blob {
     static SEEN: std::sync::Mutex<Vec<egui::epaint::text::Blob>> = std::sync::Mutex::new(Vec::new());
     let bytes = (**blob).as_ref();
-    let mut seen = SEEN.lock().unwrap();
+    let mut seen = SEEN.lock_unpoisoned();
     if let Some(b) = seen.iter().find(|b| std::ptr::eq((***b).as_ref(), bytes)) {
         return b.clone();
     }
@@ -749,7 +750,7 @@ fn shared_bytes(blob: &egui::epaint::text::Blob) -> egui::epaint::text::Blob {
 fn map(path: impl AsRef<std::path::Path>) -> Option<&'static [u8]> {
     static MAPPED: std::sync::Mutex<Vec<(std::path::PathBuf, &'static [u8])>> = std::sync::Mutex::new(Vec::new());
     let path = std::fs::canonicalize(path).ok()?;
-    let mut mapped = MAPPED.lock().unwrap();
+    let mut mapped = MAPPED.lock_unpoisoned();
     if let Some((_, bytes)) = mapped.iter().find(|(p, _)| *p == path) {
         return Some(bytes);
     }

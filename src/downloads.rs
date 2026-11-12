@@ -5,6 +5,7 @@
 //! `downloads.json` in the data dir maps video ids to their files; a file that was
 //! moved or deleted just stops counting as downloaded.
 
+use crate::sync::RwLockExt;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, RwLock};
@@ -50,18 +51,18 @@ pub fn default_folder() -> PathBuf {
 pub fn init(data_dir: &Path, folder: &str) {
     let file = data_dir.join("downloads.json");
     let index = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-    let mut st = STATE.write().unwrap();
+    let mut st = STATE.write_unpoisoned();
     st.index = index;
     st.file = file;
     st.folder = if folder.is_empty() { default_folder() } else { PathBuf::from(folder) };
 }
 
 pub fn folder() -> PathBuf {
-    STATE.read().unwrap().folder.clone()
+    STATE.read_unpoisoned().folder.clone()
 }
 
 pub fn set_folder(folder: PathBuf) {
-    STATE.write().unwrap().folder = folder;
+    STATE.write_unpoisoned().folder = folder;
 }
 
 /// Ask for a new folder (the system picker, on its own thread).
@@ -88,12 +89,12 @@ pub fn show_file(path: &Path) {
 
 /// The song's file, if it's downloaded and still there.
 pub fn path(video_id: &str) -> Option<PathBuf> {
-    STATE.read().unwrap().index.get(video_id).map(|e| e.path.clone()).filter(|p| p.is_file())
+    STATE.read_unpoisoned().index.get(video_id).map(|e| e.path.clone()).filter(|p| p.is_file())
 }
 
 /// The downloaded songs still on disk, newest first.
 pub fn list() -> Vec<Track> {
-    let st = STATE.read().unwrap();
+    let st = STATE.read_unpoisoned();
     let mut out: Vec<(std::time::SystemTime, Track)> = st
         .index
         .values()
@@ -109,13 +110,13 @@ pub fn list() -> Vec<Track> {
 
 /// The downloaded song version of the music video `video_id`, if its file is still there.
 pub fn song_for(video_id: &str) -> Option<Track> {
-    let st = STATE.read().unwrap();
+    let st = STATE.read_unpoisoned();
     st.index.values().find(|e| e.stands_for.as_deref() == Some(video_id) && e.path.is_file()).and_then(|e| e.song.clone())
 }
 
 /// A downloaded song's audio, as a complete stream buffer for playback.
 pub fn open(video_id: &str) -> Option<Arc<Shared>> {
-    let entry = STATE.read().unwrap().index.get(video_id).cloned()?;
+    let entry = STATE.read_unpoisoned().index.get(video_id).cloned()?;
     let data = std::fs::read(&entry.path).ok()?;
     log::info!("{video_id}: playing the downloaded file");
     Some(Shared::from_bytes(data, entry.duration_ms, entry.loudness_db))
@@ -128,7 +129,7 @@ pub fn save(t: &Track, audio: &[u8], duration_ms: u64, loudness_db: Option<f32>,
     std::fs::create_dir_all(&folder)?;
     let ext = if audio.get(4..8) == Some(b"ftyp") { "m4a" } else { "webm" };
     // A file already there for this song is replaced; another song's isn't.
-    let mine = STATE.read().unwrap().index.get(&t.id).map(|e| e.path.clone());
+    let mine = STATE.read_unpoisoned().index.get(&t.id).map(|e| e.path.clone());
     let stem = file_stem(t);
     let mut path = folder.join(format!("{stem}.{ext}"));
     let mut n = 2;
@@ -151,7 +152,7 @@ pub fn save(t: &Track, audio: &[u8], duration_ms: u64, loudness_db: Option<f32>,
         log::warn!("couldn't tag {}: {e:#}", path.display());
     }
     std::fs::rename(&part, &path)?;
-    let mut st = STATE.write().unwrap();
+    let mut st = STATE.write_unpoisoned();
     // Every entry keeps its song, so the Downloads page can list it later.
     let song = Some(t.clone());
     st.index.insert(t.id.clone(), Entry { path: path.clone(), duration_ms, loudness_db, stands_for, song });

@@ -1,6 +1,7 @@
 //! The Spotify transfer: its page (pick, running, review, done), the Settings section
 //! that opens it, and the sidebar card that follows it while you browse.
 
+use crate::sync::MutexExt;
 use std::sync::atomic::Ordering;
 
 use egui::{Align2, Color32, Rect, RichText, Sense, Ui, pos2, vec2};
@@ -173,7 +174,7 @@ pub fn page(app: &mut App, ui: &mut Ui, now: f64) {
         ui.add_space(((avail - w) / 2.0).max(0.0));
         ui.vertical(|ui| {
             ui.set_width(w);
-            let guard = xfer.job.lock().unwrap();
+            let guard = xfer.job.lock_unpoisoned();
             let phase = guard.as_ref().map(|j| j.phase.clone());
             drop(guard);
             match phase {
@@ -217,7 +218,7 @@ fn setup(app: &mut App, ui: &mut Ui) {
     }
 
     // An earlier transfer that stopped part way.
-    let resumable = xfer.resumable.lock().unwrap().clone();
+    let resumable = xfer.resumable.lock_unpoisoned().clone();
     if let Some(r) = resumable {
         let mut go = None;
         settings_card(ui, |ui| {
@@ -244,7 +245,7 @@ fn setup(app: &mut App, ui: &mut Ui) {
         ui.add_space(18.0);
     }
 
-    let account = xfer.account.lock().unwrap().clone();
+    let account = xfer.account.lock_unpoisoned().clone();
     let library: &[Entry] = match &account {
         Account::SignedIn { library, .. } => library,
         _ => &[],
@@ -254,7 +255,7 @@ fn setup(app: &mut App, ui: &mut Ui) {
         if !app.xfer.link.trim().is_empty() {
             xfer.look_up(&app.backend, &app.xfer.link);
         }
-        xfer.lookup.lock().unwrap().clone().filter(|(l, _)| *l == app.xfer.link.trim())
+        xfer.lookup.lock_unpoisoned().clone().filter(|(l, _)| *l == app.xfer.link.trim())
     };
     let pasted = link_entry.as_ref().and_then(|(_, r)| r.as_ref()?.as_ref().ok().cloned());
     let chosen: Option<Entry> = match &app.xfer.picked {
@@ -558,7 +559,7 @@ fn destination(app: &mut App, ui: &mut Ui, chosen: Option<&Entry>, accent: Color
 fn running(app: &mut App, ui: &mut Ui, _now: f64) {
     let xfer = app.transfer.clone();
     let accent = app.accent_color();
-    let guard = xfer.job.lock().unwrap();
+    let guard = xfer.job.lock_unpoisoned();
     let Some(job) = guard.as_ref() else { return };
 
     ui.add_space(6.0);
@@ -875,7 +876,7 @@ fn song_row(ui: &mut Ui, i: usize, sp: &Track, result: &Search, accent: Color32,
 fn review(app: &mut App, ui: &mut Ui) {
     let xfer = app.transfer.clone();
     let accent = app.accent_color();
-    let guard = xfer.job.lock().unwrap();
+    let guard = xfer.job.lock_unpoisoned();
     let Some(job) = guard.as_ref() else { return };
     let total = job.doubts.len();
     let left = job.doubts.iter().filter(|d| d.decision.is_none()).count();
@@ -1142,7 +1143,7 @@ fn review(app: &mut App, ui: &mut Ui) {
 pub fn pick_banner(app: &mut App, ui: &mut Ui) -> bool {
     let Some(at) = app.xfer.picking else { return false };
     let song = {
-        let guard = app.transfer.job.lock().unwrap();
+        let guard = app.transfer.job.lock_unpoisoned();
         guard.as_ref().filter(|j| j.phase == Phase::Review).and_then(|j| j.tracks.get(j.doubts.get(at)?.index).cloned())
     };
     let Some(sp) = song else {
@@ -1188,7 +1189,7 @@ pub fn use_pick(app: &mut App, t: YtTrack) {
     let Some(at) = app.xfer.picking.take() else { return };
     app.transfer.decide_with(at, t);
     // Back on the next song still to check (after this one, then from the top).
-    app.xfer.focus = app.transfer.job.lock().unwrap().as_ref().and_then(|j| {
+    app.xfer.focus = app.transfer.job.lock_unpoisoned().as_ref().and_then(|j| {
         let n = j.doubts.len();
         (at + 1..n).chain(0..at.min(n)).find(|&k| j.doubts[k].decision.is_none())
     });
@@ -1246,7 +1247,7 @@ fn candidate_row(ui: &mut Ui, t: &YtTrack, video: bool, current: bool, selected:
 fn done(app: &mut App, ui: &mut Ui) {
     let xfer = app.transfer.clone();
     let accent = app.accent_color();
-    let guard = xfer.job.lock().unwrap();
+    let guard = xfer.job.lock_unpoisoned();
     let Some(job) = guard.as_ref() else { return };
     let Some(sum) = &job.summary else { return };
 
@@ -1374,8 +1375,8 @@ fn failed(app: &mut App, ui: &mut Ui, e: &str) {
     page_title(ui, "Transfer stopped");
     ui.add_space(10.0);
     // Only this transfer's own progress (one that failed before saving any has none).
-    let source = xfer.job.lock().unwrap().as_ref().map(|j| j.source.clone());
-    let resumable = xfer.resumable.lock().unwrap().clone().filter(|r| Some(&r.source) == source.as_ref());
+    let source = xfer.job.lock_unpoisoned().as_ref().map(|j| j.source.clone());
+    let resumable = xfer.resumable.lock_unpoisoned().clone().filter(|r| Some(&r.source) == source.as_ref());
     let (mut retry, mut close) = (false, false);
     settings_card(ui, |ui| {
         setting_row(ui, "Something went wrong", Some(e), |ui| {
@@ -1401,7 +1402,7 @@ pub fn settings_section(app: &mut App, ui: &mut Ui) {
     let xfer = app.transfer.clone();
     xfer.ensure_account(&app.backend);
     section_label(ui, "Import", None);
-    let account = xfer.account.lock().unwrap().clone();
+    let account = xfer.account.lock_unpoisoned().clone();
     let mut open = false;
     settings_card(ui, |ui| {
         let w = ui.available_width();
@@ -1426,7 +1427,7 @@ pub fn settings_section(app: &mut App, ui: &mut Ui) {
 /// Whether the sidebar shows the transfer card: while it runs, waits or failed, and for
 /// a few seconds after it finishes (the summary stays on the transfer page).
 pub fn sidebar_visible(app: &App, now: f64) -> bool {
-    match app.transfer.job.lock().unwrap().as_ref().map(|j| &j.phase) {
+    match app.transfer.job.lock_unpoisoned().as_ref().map(|j| &j.phase) {
         None => false,
         Some(Phase::Done) => app.xfer.done_at.is_none_or(|t| now - t < DONE_LINGER),
         Some(_) => true,
@@ -1439,7 +1440,7 @@ const DONE_LINGER: f64 = 6.0;
 /// The card above Settings in the sidebar while a transfer runs, waits or just finished.
 pub fn sidebar_card(app: &mut App, ui: &mut Ui, collapsed: bool, fade: f32, icon_x: f32) {
     let (frac, status) = {
-        let guard = app.transfer.job.lock().unwrap();
+        let guard = app.transfer.job.lock_unpoisoned();
         let Some(job) = guard.as_ref() else { return };
         match &job.phase {
             Phase::Reading => (0.0, "Reading".to_owned()),
@@ -1494,7 +1495,7 @@ pub fn poll(app: &mut App, ctx: &egui::Context, now: f64) {
         app.xfer.link = l.to_owned();
     }
     let (phase, name, doubts) = {
-        let guard = app.transfer.job.lock().unwrap();
+        let guard = app.transfer.job.lock_unpoisoned();
         match guard.as_ref() {
             Some(j) => (Some(j.phase.clone()), j.name.clone(), j.doubts.len()),
             None => (None, String::new(), 0),

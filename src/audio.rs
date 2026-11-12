@@ -3,6 +3,7 @@
 //! The UI talks to it through `AudioHandle`; status flows back through `AudioStatus`
 //! (lock-free reads for the progress bar) plus a `Finished` event for auto-advance.
 
+use crate::sync::MutexExt;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::{Duration, Instant};
@@ -749,7 +750,7 @@ impl Output {
         // which can be just after it reported the error.
         let waited = Instant::now();
         let source = loop {
-            if let Some(source) = self.slot.lock().unwrap().take() {
+            if let Some(source) = self.slot.lock_unpoisoned().take() {
                 break source;
             }
             if waited.elapsed() > Duration::from_secs(1) {
@@ -861,7 +862,7 @@ impl Drop for Bridge {
                 source.next();
                 self.n += 1;
             }
-            *self.slot.lock().unwrap() = Some(source);
+            *self.slot.lock_unpoisoned() = Some(source);
         }
     }
 }
@@ -1091,18 +1092,18 @@ fn run(
                 if let Some(s) = shared.clone() {
                     // One builder at a time, always for the latest seek: a burst of seeks
                     // (a jam catching up) mustn't pile up threads waiting on the download.
-                    *seek_job.lock().unwrap() = Some(SeekJob { shared: s, pos, live, generation: current, seek: seek_seq });
+                    *seek_job.lock_unpoisoned() = Some(SeekJob { shared: s, pos, live, generation: current, seek: seek_seq });
                     if !seek_busy.swap(true, Ordering::AcqRel) {
                         let (job, busy, tx, events) = (seek_job.clone(), seek_busy.clone(), tx.clone(), events.clone());
                         std::thread::spawn(move || {
                             loop {
-                                let next = job.lock().unwrap().take();
+                                let next = job.lock_unpoisoned().take();
                                 match next {
                                     Some(j) => build_seek(j, &tx, &events),
                                     None => {
                                         busy.store(false, Ordering::Release);
                                         // A seek that came in just now finds `busy` already false, or is taken here.
-                                        if job.lock().unwrap().is_none() || busy.swap(true, Ordering::AcqRel) {
+                                        if job.lock_unpoisoned().is_none() || busy.swap(true, Ordering::AcqRel) {
                                             break;
                                         }
                                     }

@@ -14,6 +14,7 @@
 //! pretends to be that version; `YTM_UPDATE_DRYRUN=1` logs the install command
 //! instead of running it; `YTM_UPDATE_FEED=<url>` reads the latest release from there.
 
+use crate::sync::MutexExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -122,11 +123,11 @@ impl Updater {
     }
 
     pub fn state(&self) -> State {
-        self.state.lock().unwrap().clone()
+        self.state.lock_unpoisoned().clone()
     }
 
     fn set(&self, s: State) {
-        *self.state.lock().unwrap() = s;
+        *self.state.lock_unpoisoned() = s;
         (self.wake)();
     }
 
@@ -135,7 +136,7 @@ impl Updater {
     pub fn notes(&self, version: &str) -> Option<String> {
         let version = version.trim_start_matches('v').to_owned();
         {
-            let mut notes = self.notes.lock().unwrap();
+            let mut notes = self.notes.lock_unpoisoned();
             if let Some(n) = notes.get(&version) {
                 return n.clone();
             }
@@ -156,7 +157,7 @@ impl Updater {
                 Err(_) => None,
             };
             if body.is_some() {
-                this.notes.lock().unwrap().insert(version.clone(), body);
+                this.notes.lock_unpoisoned().insert(version.clone(), body);
                 (this.wake)();
             }
         });
@@ -168,7 +169,7 @@ impl Updater {
     /// background the first time it's asked for; `None` until it arrives.
     pub fn downloads(&self) -> Option<u64> {
         {
-            let mut d = self.downloads.lock().unwrap();
+            let mut d = self.downloads.lock_unpoisoned();
             if let Some(n) = *d {
                 return n;
             }
@@ -191,7 +192,7 @@ impl Updater {
             let total = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(anyhow::Error::from).and_then(|rt| rt.block_on(fetch));
             match total {
                 Ok(n) => {
-                    *this.downloads.lock().unwrap() = Some(Some(n));
+                    *this.downloads.lock_unpoisoned() = Some(Some(n));
                     (this.wake)();
                 }
                 Err(e) => log::warn!("update: download count: {e:#}"),
@@ -228,7 +229,7 @@ impl Updater {
         let release: serde_json::Value = http.get(feed).send().await?.error_for_status()?.json().await?;
         let tag = release["tag_name"].as_str().unwrap_or_default();
         if let Some(body) = release["body"].as_str() {
-            self.notes.lock().unwrap().insert(tag.trim_start_matches('v').to_owned(), Some(body.to_owned()));
+            self.notes.lock_unpoisoned().insert(tag.trim_start_matches('v').to_owned(), Some(body.to_owned()));
         }
         let current = current_version();
         if !newer(tag, &current) {

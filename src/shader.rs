@@ -4,6 +4,7 @@
 //! crossfade. Everything runs in one fragment pass over a 64×64 texture. The same
 //! shader is written twice: GLSL for OpenGL, WGSL for wgpu (see renderer.rs).
 
+use crate::sync::MutexExt;
 use std::sync::{Arc, Mutex};
 
 use eframe::glow::{self, HasContext};
@@ -377,7 +378,7 @@ impl Background {
 
     /// Queue new art; it is uploaded on the GL thread at the next paint.
     pub fn set_art(&self, art: Art) {
-        *self.pending.lock().unwrap() = Some(art);
+        *self.pending.lock_unpoisoned() = Some(art);
     }
 
     pub fn paint(&self, painter: &egui::Painter, rect: egui::Rect, p: Params) {
@@ -388,10 +389,10 @@ impl Background {
         let (gl_state, pending) = (self.gl.clone(), self.pending.clone());
         let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| {
             let gl = painter.gl();
-            let mut guard = gl_state.lock().unwrap();
+            let mut guard = gl_state.lock_unpoisoned();
             let Some(s) = guard.as_mut() else { return };
             unsafe {
-                if let Some(art) = pending.lock().unwrap().take() {
+                if let Some(art) = pending.lock_unpoisoned().take() {
                     // New art goes into the other slot; the app animates `blend` 0→1.
                     s.cur ^= 1;
                     upload(gl, s.tex[s.cur], &art);
@@ -421,7 +422,7 @@ impl Background {
     }
 
     pub fn destroy(&self, gl: &glow::Context) {
-        if let Some(s) = self.gl.lock().unwrap().take() {
+        if let Some(s) = self.gl.lock_unpoisoned().take() {
             unsafe {
                 gl.delete_program(s.program);
                 gl.delete_vertex_array(s.vao);
@@ -449,7 +450,7 @@ impl eframe::egui_wgpu::CallbackTrait for WgpuPaint {
         resources: &mut eframe::egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         let Some(s) = resources.get_mut::<Wgpu>() else { return Vec::new() };
-        if let Some(art) = self.pending.lock().unwrap().take() {
+        if let Some(art) = self.pending.lock_unpoisoned().take() {
             // New art goes into the other slot; the app animates `blend` 0→1.
             s.cur ^= 1;
             upload_wgpu(queue, &s.tex[s.cur], &art);

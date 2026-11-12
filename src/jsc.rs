@@ -7,6 +7,7 @@
 //! fraction of parsing the 4 MB script, so the worker thread can exit soon after each
 //! burst of solves and give QuickJS's ~20 MB back instead of holding it all session.
 
+use crate::sync::MutexExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -113,13 +114,13 @@ impl Solver {
         if let Some((p, _)) = cached.as_ref().filter(|(_, at)| at.elapsed() < PLAYER_TTL) {
             return Ok(p.clone());
         }
-        if self.failed.lock().unwrap().is_some_and(|at| at.elapsed() < Duration::from_secs(600)) {
+        if self.failed.lock_unpoisoned().is_some_and(|at| at.elapsed() < Duration::from_secs(600)) {
             anyhow::bail!("the player couldn't be prepared a moment ago");
         }
         let res = self.prepare(http).await;
         match &res {
             Ok(p) => *cached = Some((p.clone(), Instant::now())),
-            Err(_) => *self.failed.lock().unwrap() = Some(Instant::now()),
+            Err(_) => *self.failed.lock_unpoisoned() = Some(Instant::now()),
         }
         res
     }
@@ -181,7 +182,7 @@ impl Solver {
 
     /// Hand a job to the worker, starting it if it has exited.
     fn send(&self, mut job: Job) -> anyhow::Result<()> {
-        let mut worker = self.worker.lock().unwrap();
+        let mut worker = self.worker.lock_unpoisoned();
         if let Some(tx) = worker.as_ref() {
             match tx.send(job) {
                 Ok(()) => return Ok(()),

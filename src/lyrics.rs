@@ -10,6 +10,7 @@
 //! The API needs a JWT, obtained by exchanging a Cloudflare Turnstile token (see
 //! turnstile.rs). JWTs last 24 h and are cached on disk.
 
+use crate::sync::MutexExt;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -255,7 +256,7 @@ impl Client {
 
     /// Every source's lyrics for a song: the Better Lyrics stream, Unison and lrc.red, together.
     pub async fn fetch(&self, q: &Query<'_>) -> anyhow::Result<LyricsSet> {
-        if let Some((_, l)) = self.recent.lock().unwrap().iter().find(|(id, _)| id == q.video_id) {
+        if let Some((_, l)) = self.recent.lock_unpoisoned().iter().find(|(id, _)| id == q.video_id) {
             return Ok(l.clone());
         }
         let (stream, unison, lrcred) = tokio::join!(self.fetch_stream(q), self.fetch_unison(q), self.fetch_lrcred(q));
@@ -277,7 +278,7 @@ impl Client {
         }
         sources.sort_by_key(|l| Provider::ALL.iter().position(|p| *p == l.provider));
         let set = LyricsSet { sources };
-        let mut recent = self.recent.lock().unwrap();
+        let mut recent = self.recent.lock_unpoisoned();
         if recent.len() == RECENT {
             recent.pop_front();
         }
@@ -383,14 +384,14 @@ impl Client {
         if let Some(t) = slot.as_ref().filter(|t| !force_new && jwt_seconds_left(t) > 60) {
             return Ok(t.clone());
         }
-        if self.challenge_failed.lock().unwrap().is_some_and(|at| at.elapsed() < CHALLENGE_RETRY) {
+        if self.challenge_failed.lock_unpoisoned().is_some_and(|at| at.elapsed() < CHALLENGE_RETRY) {
             anyhow::bail!("lyrics verification failed recently; retrying later");
         }
         let profile = self.webview_profile.clone();
         let turnstile = match tokio::task::spawn_blocking(move || crate::turnstile::obtain(profile)).await? {
             Ok(t) => t,
             Err(e) => {
-                *self.challenge_failed.lock().unwrap() = Some(std::time::Instant::now());
+                *self.challenge_failed.lock_unpoisoned() = Some(std::time::Instant::now());
                 return Err(e);
             }
         };

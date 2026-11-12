@@ -1,5 +1,6 @@
 //! Dev hooks: test screenshots, the theme tour, frame pacing and `YTM_*` variables.
 
+use crate::sync::MutexExt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -68,15 +69,15 @@ pub(super) fn dev_screenshot(ctx: &egui::Context, now: f64) {
             REQUESTED.fetch_add(1, Ordering::Relaxed);
             let c = ctx.clone();
             ctx.request_screenshot(move |img| {
-                FRAMES.lock().unwrap().push((now, img));
+                FRAMES.lock_unpoisoned().push((now, img));
                 c.request_repaint();
             });
             ctx.request_repaint();
         } else if now < at {
             ctx.request_repaint_after(Duration::from_secs_f64(at - now));
-        } else if FRAMES.lock().unwrap().len() == n {
+        } else if FRAMES.lock_unpoisoned().len() == n {
             let path = std::path::PathBuf::from(path);
-            let shots = std::mem::take(&mut *FRAMES.lock().unwrap());
+            let shots = std::mem::take(&mut *FRAMES.lock_unpoisoned());
             DONE.store(true, Ordering::Relaxed);
             std::thread::spawn(move || {
                 let t0 = shots[0].0;
@@ -129,7 +130,7 @@ pub(super) fn dev_pace() {
     static STATE: Mutex<Option<(Instant, Instant, u32)>> = Mutex::new(None);
     let Some(hz) = *HZ.get_or_init(|| std::env::var("YTM_FPS").ok().and_then(|v| v.parse().ok())) else { return };
     let period = std::time::Duration::from_secs_f64(1.0 / hz);
-    let mut st = STATE.lock().unwrap();
+    let mut st = STATE.lock_unpoisoned();
     let now = Instant::now();
     let (last, window, frames) = st.get_or_insert((now, now, 0));
     let next = *last + period;

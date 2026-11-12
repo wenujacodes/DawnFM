@@ -8,6 +8,7 @@
 //! Several readers may share one buffer (the audio engine opens a second, seekable
 //! decoder when the user seeks); the download stops once the last reader is dropped.
 
+use crate::sync::MutexExt;
 use std::future::Future;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::pin::Pin;
@@ -169,7 +170,7 @@ impl Shared {
         let n = blocks.len();
         let shared = Self::new(total, duration_ms, loudness_db, format, info, false);
         {
-            let mut inner = shared.inner.lock().unwrap();
+            let mut inner = shared.inner.lock_unpoisoned();
             inner.blocks = blocks;
             inner.windowed = false;
             inner.ever = vec![true; n];
@@ -181,7 +182,7 @@ impl Shared {
 
     /// The whole file, once every block has arrived (a download nobody's reading).
     pub fn bytes(&self) -> Option<Vec<u8>> {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.lock_unpoisoned();
         let mut out = Vec::with_capacity(self.total as usize);
         for b in &inner.blocks {
             out.extend_from_slice(b.as_ref()?);
@@ -191,7 +192,7 @@ impl Shared {
 
     /// Every block is in memory: readers never wait and the buffer can be replayed.
     pub fn is_complete(&self) -> bool {
-        self.inner.lock().unwrap().blocks.iter().all(Option::is_some)
+        self.inner.lock_unpoisoned().blocks.iter().all(Option::is_some)
     }
 
     /// Wait until the download stops, however it ends.
@@ -201,18 +202,18 @@ impl Shared {
 
     /// Why the download stopped early, if it failed.
     pub fn error(&self) -> Option<String> {
-        self.inner.lock().unwrap().error.clone()
+        self.inner.lock_unpoisoned().error.clone()
     }
 
     /// Stop downloading (e.g. a prefetch that was superseded).
     pub fn cancel(&self) {
-        self.inner.lock().unwrap().cancelled = true;
+        self.inner.lock_unpoisoned().cancelled = true;
         self.ready.notify_all();
         self.changed.notify_waiters();
     }
 
     fn claim(&self) -> Claim {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock_unpoisoned();
         if inner.cancelled || inner.error.is_some() {
             return Claim::Done;
         }
@@ -234,7 +235,7 @@ impl Shared {
     }
 
     fn put(&self, idx: usize, data: Bytes) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock_unpoisoned();
         inner.blocks[idx] = Some(data);
         inner.in_flight[idx] = false;
         if !std::mem::replace(&mut inner.ever[idx], true) {
@@ -256,7 +257,7 @@ impl Shared {
     fn fail(&self, err: String) {
         log::error!("download failed: {err}");
         FAIL_FROM.store(usize::MAX, std::sync::atomic::Ordering::Relaxed);
-        self.inner.lock().unwrap().error = Some(err);
+        self.inner.lock_unpoisoned().error = Some(err);
         self.ready.notify_all();
     }
 
@@ -445,7 +446,7 @@ async fn download_whole(http: &reqwest::Client, url: &str, ua: &str, shared: &Ar
         .and_then(reqwest::Response::error_for_status)
         .map_err(reqwest::Error::without_url)?;
         let block = BLOCK as usize;
-        let blocks = shared.inner.lock().unwrap().blocks.len();
+        let blocks = shared.inner.lock_unpoisoned().blocks.len();
         let mut buf = bytes::BytesMut::with_capacity(block);
         let (mut idx, mut received) = (0usize, 0u64);
         while let Some(chunk) = tokio::time::timeout(STALL, resp.chunk()).await.map_err(|_| stalled())?.map_err(reqwest::Error::without_url)? {
@@ -455,7 +456,7 @@ async fn download_whole(http: &reqwest::Client, url: &str, ua: &str, shared: &Ar
                 shared.put(idx, buf.split_to(block).freeze());
                 idx += 1;
             }
-            if shared.inner.lock().unwrap().cancelled {
+            if shared.inner.lock_unpoisoned().cancelled {
                 return anyhow::Ok(());
             }
         }
@@ -471,7 +472,7 @@ async fn download_whole(http: &reqwest::Client, url: &str, ua: &str, shared: &Ar
             shared.done.send_replace(true);
         }
         Err(e) => {
-            if !shared.inner.lock().unwrap().cancelled {
+            if !shared.inner.lock_unpoisoned().cancelled {
                 shared.fail(format!("stream: {e:#}"));
             }
         }
@@ -491,7 +492,7 @@ impl StreamReader {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         {
-            let mut inner = shared.inner.lock().unwrap();
+            let mut inner = shared.inner.lock_unpoisoned();
             inner.readers += 1;
             inner.limit = inner.blocks.len();
             inner.wants.push((id, 0));
@@ -503,7 +504,7 @@ impl StreamReader {
 
 impl Drop for StreamReader {
     fn drop(&mut self) {
-        let mut inner = self.shared.inner.lock().unwrap();
+        let mut inner = self.shared.inner.lock_unpoisoned();
         inner.readers -= 1;
         inner.wants.retain(|&(id, _)| id != self.id);
         if inner.readers == 0 {
@@ -520,7 +521,7 @@ impl Read for StreamReader {
             return Ok(0);
         }
         let idx = (self.pos / BLOCK) as usize;
-        let mut inner = self.shared.inner.lock().unwrap();
+        let mut inner = self.shared.inner.lock_unpoisoned();
         inner.want = idx;
         if idx != self.block {
             self.block = idx;

@@ -6,6 +6,7 @@
 //! which drains the queue with `take()` (the same pattern as `tray.rs`). A code that
 //! arrives before the UI is up just waits in the queue.
 
+use crate::sync::MutexExt;
 use std::sync::Mutex;
 
 use crate::jam::normalize_code as normalize;
@@ -63,12 +64,12 @@ pub fn from_args() -> Option<String> {
 
 /// Queue a code for the UI (e.g. from the launch arguments).
 pub fn push(code: String) {
-    PENDING.lock().unwrap().push(code);
+    PENDING.lock_unpoisoned().push(code);
 }
 
 /// Codes received since the last call, oldest first.
 pub fn take() -> Vec<String> {
-    std::mem::take(&mut *PENDING.lock().unwrap())
+    std::mem::take(&mut *PENDING.lock_unpoisoned())
 }
 
 /// Whether a later launch asked for the window since the last call.
@@ -97,11 +98,11 @@ static WAKE: Mutex<Option<Waker>> = Mutex::new(None);
 /// Wake the UI with `wake` whenever a link arrives. Codes queued before this (a cold
 /// launch from a link) get one wake now.
 pub fn listen(wake: impl Fn() + Send + 'static) {
-    let pending = !PENDING.lock().unwrap().is_empty();
+    let pending = !PENDING.lock_unpoisoned().is_empty();
     if pending {
         wake();
     }
-    *WAKE.lock().unwrap() = Some(Box::new(wake));
+    *WAKE.lock_unpoisoned() = Some(Box::new(wake));
 }
 
 /// A URL from the system (the Apple Event): queue its code and wake the UI.
@@ -112,7 +113,7 @@ fn receive(url: &str) {
     };
     log::info!("deeplink: jam {code}");
     push(code);
-    if let Some(wake) = WAKE.lock().unwrap().as_ref() {
+    if let Some(wake) = WAKE.lock_unpoisoned().as_ref() {
         wake();
     }
 }

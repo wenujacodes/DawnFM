@@ -2,6 +2,7 @@
 //! client): request context, signed-in or anonymous headers, visitor data and the
 //! current client version. Parsing lives in `ytm.rs`.
 
+use crate::sync::RwLockExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, RwLock};
@@ -90,7 +91,7 @@ impl Api {
     }
 
     pub fn account(&self) -> Option<Arc<Session>> {
-        self.account.read().unwrap().clone()
+        self.account.read_unpoisoned().clone()
     }
 
     /// Which sign-in and channel requests go as: changes with each sign-in, sign-out
@@ -102,7 +103,7 @@ impl Api {
     /// Sign in: save the session and use it. Under the session's lock, like every
     /// save, so an older copy can't be saved over it. False when it couldn't be saved.
     pub fn sign_in(&self, s: Session) -> bool {
-        let mut slot = self.account.write().unwrap();
+        let mut slot = self.account.write_unpoisoned();
         let saved = self.file.parent().is_some_and(|dir| s.save(dir));
         *slot = Some(Arc::new(s));
         self.epoch.fetch_add(1, Relaxed);
@@ -111,7 +112,7 @@ impl Api {
 
     /// Sign out: forget the session, saved copy included, under its lock.
     pub fn sign_out(&self) {
-        let mut slot = self.account.write().unwrap();
+        let mut slot = self.account.write_unpoisoned();
         if let Some(dir) = self.file.parent() {
             Session::remove(dir);
         }
@@ -158,7 +159,7 @@ impl Api {
         let Some(account) = self.account().filter(|a| a.visitor_data.is_none()) else { return };
         match self.session_from_cookie(&account.cookie).await {
             Ok(fresh) => {
-                let mut slot = self.account.write().unwrap();
+                let mut slot = self.account.write_unpoisoned();
                 if let Some(cur) = slot.as_ref().filter(|s| s.same_login(&account)) {
                     let mut next = (**cur).clone();
                     next.visitor_data = fresh.visitor_data;
@@ -207,7 +208,7 @@ impl Api {
 
     /// Keep the cookies Google replaced while answering a request made as `used`.
     pub fn keep<'a>(&self, used: &Session, set_cookies: impl IntoIterator<Item = &'a str>) {
-        let mut slot = self.account.write().unwrap();
+        let mut slot = self.account.write_unpoisoned();
         // Onto the current session: another request may have updated it meanwhile.
         let Some(new) = slot.as_ref().filter(|s| s.same_login(used)).and_then(|s| s.updated(set_cookies)) else { return };
         // Saved before the lock goes, so saves land in the order the session changed.
@@ -328,7 +329,7 @@ impl Api {
     /// and save that. Only if requests still go as at `epoch`, when the channel was picked:
     /// another sign-in since has other channels. The new epoch.
     pub fn switch_channel(&self, page_id: Option<String>, epoch: u64) -> anyhow::Result<u64> {
-        let mut slot = self.account.write().unwrap();
+        let mut slot = self.account.write_unpoisoned();
         anyhow::ensure!(self.epoch() == epoch, "The account changed meanwhile; pick the channel again");
         let next = slot.as_ref().ok_or_else(|| anyhow::anyhow!("sign in first"))?.on_channel(page_id);
         // Not switched unless it's kept: the next launch would be on the old channel.

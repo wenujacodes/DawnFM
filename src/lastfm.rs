@@ -6,6 +6,7 @@
 //! Scrobbles that can't be sent (offline, Last.fm down) wait in `lastfm_queue.json`
 //! and go out with the next one.
 
+use crate::sync::MutexExt;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
@@ -57,16 +58,16 @@ pub fn init(data_dir: &Path) {
         Some(Session { name: name.to_owned(), key: key.to_owned() })
     });
     let queue = std::fs::read(data_dir.join("lastfm_queue.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-    *STATE.lock().unwrap() = State { session, data_dir: data_dir.to_owned(), queue };
+    *STATE.lock_unpoisoned() = State { session, data_dir: data_dir.to_owned(), queue };
 }
 
 /// The signed-in Last.fm user.
 pub fn user() -> Option<String> {
-    STATE.lock().unwrap().session.as_ref().map(|s| s.name.clone())
+    STATE.lock_unpoisoned().session.as_ref().map(|s| s.name.clone())
 }
 
 pub fn sign_out() {
-    let mut st = STATE.lock().unwrap();
+    let mut st = STATE.lock_unpoisoned();
     st.session = None;
     st.queue.clear();
     save_queue(&st);
@@ -86,9 +87,9 @@ pub async fn sign_in(http: &reqwest::Client) -> anyhow::Result<String> {
             Ok(v) => {
                 let name = v["session"]["name"].as_str().unwrap_or_default().to_owned();
                 let key = v["session"]["key"].as_str().ok_or_else(|| anyhow::anyhow!("no session key from Last.fm"))?.to_owned();
-                let data_dir = STATE.lock().unwrap().data_dir.clone();
+                let data_dir = STATE.lock_unpoisoned().data_dir.clone();
                 crate::vault::set(VAULT, &data_dir, format!("{name}\n{key}").as_bytes())?;
-                STATE.lock().unwrap().session = Some(Session { name: name.clone(), key });
+                STATE.lock_unpoisoned().session = Some(Session { name: name.clone(), key });
                 log::info!("last.fm: signed in as {name}");
                 return Ok(name);
             }
@@ -120,9 +121,9 @@ pub async fn now_playing(http: &reqwest::Client, s: &Scrobble) {
 pub async fn scrobble(http: &reqwest::Client, s: Scrobble) {
     let _sending = SENDING.lock().await;
     let Some(sk) = session_key() else { return };
-    STATE.lock().unwrap().queue.push(s);
+    STATE.lock_unpoisoned().queue.push(s);
     loop {
-        let batch: Vec<Scrobble> = STATE.lock().unwrap().queue.iter().take(BATCH).cloned().collect();
+        let batch: Vec<Scrobble> = STATE.lock_unpoisoned().queue.iter().take(BATCH).cloned().collect();
         if batch.is_empty() {
             break;
         }
@@ -145,7 +146,7 @@ pub async fn scrobble(http: &reqwest::Client, s: Scrobble) {
             Ok(v) => {
                 let accepted = v["scrobbles"]["@attr"]["accepted"].as_u64().unwrap_or(0);
                 log::info!("last.fm: scrobbled {accepted} of {}", batch.len());
-                let mut st = STATE.lock().unwrap();
+                let mut st = STATE.lock_unpoisoned();
                 st.queue.drain(..batch.len());
                 save_queue(&st);
             }
@@ -158,7 +159,7 @@ pub async fn scrobble(http: &reqwest::Client, s: Scrobble) {
             // Offline or Last.fm trouble (11, 16, 29): keep them for next time.
             Err(e) => {
                 log::warn!("last.fm: scrobble failed, keeping {} for later: {e:#}", batch.len());
-                save_queue(&STATE.lock().unwrap());
+                save_queue(&STATE.lock_unpoisoned());
                 break;
             }
         }
@@ -166,7 +167,7 @@ pub async fn scrobble(http: &reqwest::Client, s: Scrobble) {
 }
 
 fn session_key() -> Option<String> {
-    STATE.lock().unwrap().session.as_ref().map(|s| s.key.clone())
+    STATE.lock_unpoisoned().session.as_ref().map(|s| s.key.clone())
 }
 
 fn save_queue(st: &State) {

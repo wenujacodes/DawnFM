@@ -13,6 +13,7 @@
 //! The mode lives in `<data dir>/proxy`; a custom URL can carry a password, so it's
 //! kept in the credential store.
 
+use crate::sync::RwLockExt;
 use std::path::Path;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -134,10 +135,10 @@ static HTTP: std::sync::RwLock<Option<reqwest::Client>> = std::sync::RwLock::new
 /// The client for YouTube Music and its streams. It's rebuilt when `new_circuit`
 /// picks another exit: pooled connections would otherwise stay on the old one.
 pub fn http() -> reqwest::Client {
-    if let Some(c) = HTTP.read().unwrap().as_ref() {
+    if let Some(c) = HTTP.read_unpoisoned().as_ref() {
         return c.clone();
     }
-    HTTP.write().unwrap().get_or_insert_with(|| build_for(CIRCUIT.load(std::sync::atomic::Ordering::Relaxed))).clone()
+    HTTP.write_unpoisoned().get_or_insert_with(|| build_for(CIRCUIT.load(std::sync::atomic::Ordering::Relaxed))).clone()
 }
 
 fn build_for(n: u32) -> reqwest::Client {
@@ -187,7 +188,7 @@ pub async fn new_circuit(available: impl AsyncFn(&reqwest::Client) -> bool) -> b
         if let Ok(((n, c), _)) = futures_util::future::select_ok(tries.map(Box::pin)).await {
             log::info!("proxy: switched to another exit (circuit {n})");
             CIRCUIT.store(n, Relaxed);
-            *HTTP.write().unwrap() = Some(c);
+            *HTTP.write_unpoisoned() = Some(c);
             return true;
         }
     }

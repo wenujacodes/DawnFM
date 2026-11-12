@@ -1,5 +1,6 @@
 //! The Google and Spotify sign-in windows, and uploading songs to the account.
 
+use crate::sync::MutexExt;
 use std::sync::atomic::Ordering;
 
 use crate::backend::Req;
@@ -13,7 +14,7 @@ impl App {
         std::thread::spawn(move || {
             let files = rfd::FileDialog::new().set_title("Upload music").add_filter("Audio", UPLOAD_EXTS).pick_files();
             if let Some(files) = files {
-                *slot.lock().unwrap() = Some(files);
+                *slot.lock_unpoisoned() = Some(files);
                 ctx.request_repaint();
             }
         });
