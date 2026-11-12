@@ -329,4 +329,23 @@ mod tests {
             println!("after {idle} s idle: /player {:?} (30 s pool), {:?} (120 s pool)", took[0], took[1]);
         }
     }
+
+    /// The `/player` call on a fresh connection, against one `Backend::warm_player` opened.
+    /// `cargo test --release -- --ignored player_cold_warm --nocapture`
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn player_cold_warm() {
+        let api = crate::ytmapi::Api::new(&std::env::temp_dir().join("ytm-rs-opus-test"));
+        let vd = api.visitor_data(false).await.unwrap();
+        for _ in 0..4 {
+            let t = Instant::now();
+            crate::innertube::audio_stream(&reqwest::Client::new(), "a4O-abCXsfA", &vd, true).await.unwrap();
+            let cold = t.elapsed();
+            let warmed = reqwest::Client::new();
+            warmed.get(crate::innertube::WARM_URL).send().await.unwrap();
+            let t = Instant::now();
+            crate::innertube::audio_stream(&warmed, "a4O-abCXsfA", &vd, true).await.unwrap();
+            println!("player cold {cold:?}, warmed {:?}", t.elapsed());
+        }
+    }
 }

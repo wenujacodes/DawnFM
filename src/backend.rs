@@ -597,6 +597,25 @@ impl Backend {
         crate::proxy::http()
     }
 
+    /// Open a connection to www.youtube.com, which the next song's visionOS `/player`
+    /// call then takes instead of a TLS handshake of its own (0.2-0.5 s).
+    /// At most once a minute; the shared client keeps it open for two.
+    fn warm_player(&self) {
+        static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        if now.saturating_sub(LAST.load(Ordering::Relaxed)) < 60 {
+            return;
+        }
+        LAST.store(now, Ordering::Relaxed);
+        let http = self.http();
+        self.rt.spawn(async move {
+            let r = http.get(innertube::WARM_URL).header("User-Agent", innertube::UA).timeout(std::time::Duration::from_secs(5)).send().await;
+            if let Err(e) = r {
+                log::debug!("couldn't warm up the player connection: {}", e.without_url());
+            }
+        });
+    }
+
     pub fn spawn<F: Future<Output = ()> + Send + 'static>(&self, f: F) {
         self.rt.spawn(f);
     }
@@ -607,6 +626,10 @@ impl Backend {
 
     pub fn request(&self, req: Req) {
         let (what, quiet) = (req.name(), req.quiet());
+        // Browsing comes before picking a song: have its `/player` call's connection ready.
+        if !quiet && !matches!(req, Req::Play { .. }) {
+            self.warm_player();
+        }
         let play_gen = match &req {
             Req::Play { generation, .. } => Some(*generation),
             _ => None,

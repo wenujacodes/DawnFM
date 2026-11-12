@@ -8,6 +8,9 @@
 
 use serde_json::{Value, json};
 
+/// An empty answer from the host `/player` calls go to: opens a connection ahead of one.
+pub const WARM_URL: &str = "https://www.youtube.com/generate_204";
+
 pub const UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
 
 pub struct Stream {
