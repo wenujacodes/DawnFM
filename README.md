@@ -12,15 +12,12 @@
   </p>
 
   <p>
-    <a href="https://discord.gg/cWQSGjpXM">Discord</a> ·
     <a href="https://github.com/wenujacodes/DuskFM/releases/latest">Download</a> ·
     <a href="#features">Features</a> ·
     <a href="#installation">Installation</a> ·
     <a href="#building-from-source">Build from source</a>
   </p>
 </div>
-
-> **Dusk FM** is a macOS app based on [BitChord PC Continued](https://github.com/jackychan4891/BitChord-PC-Continued) by **[jackychan4891](https://github.com/jackychan4891)**. All credit for the original app goes to them. This repository is maintained separately by [wenujacodes](https://github.com/wenujacodes) and may be modified from the original.
 
 > Dusk FM is an independent, unofficial client. It is not affiliated with, endorsed by, or connected to YouTube, Google, or Apple.
 
