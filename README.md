@@ -1,6 +1,6 @@
 <div align="center">
   <h1>BitChord</h1>
-  <p><strong>A fast, native YouTube Music desktop app — rebuilt in Rust.</strong></p>
+  <p><strong>A fast, native YouTube Music desktop app - rebuilt in Rust.</strong></p>
   <p>Built with egui and rodio. No Electron, no embedded browser player, and light on memory while playing.</p>
 
   <p>
@@ -31,38 +31,38 @@
     <td width="50%"><img src="docs/readme/screenshot-2.png" alt="Browse view with shelves and playback controls"></td>
   </tr>
   <tr>
-    <td align="center"><b>Player</b> — artwork, lyrics, queue and playback in one view</td>
-    <td align="center"><b>Browse</b> — your music, shelves and navigation</td>
+    <td align="center"><b>Player</b> - artwork, lyrics, queue and playback in one view</td>
+    <td align="center"><b>Browse</b> - your music, shelves and navigation</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/readme/screenshot-3.png" alt="BitChord interface and playback" width="100%"></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><b>Desktop experience</b> — native UI, fast playback, and quality controls</td>
+    <td colspan="2" align="center"><b>Desktop experience</b> - native UI, fast playback, and quality controls</td>
   </tr>
 </table>
 
 ## Features
 
 **Playback**
-- **YouTube Music, natively** — search, browse, albums, playlists, artist pages, radio, mixes, charts and your library.
-- **Lossless / Hi-Res Lossless / Dolby Atmos** — play higher-quality copies from configured hi-res addon sources when a matching copy is available, with YouTube audio as the fallback.
-- **Quality controls in the player** — see the active audio quality, prefer Dolby Atmos when available, and revert or upgrade quality from the player menu.
-- **Automix and crossfade** — DJ-style transitions between songs, with a mixing state shown in the player during transitions.
-- **Queue and playback controls** — shuffle, repeat, autoplay, song radio, next-track prefetch, volume normalization, and output device selection.
-- **Downloads** — save songs for offline playback.
+- **YouTube Music, natively** - search, browse, albums, playlists, artist pages, radio, mixes, charts and your library.
+- **Lossless / Hi-Res Lossless / Dolby Atmos** - play higher-quality copies from configured hi-res addon sources when a matching copy is available, with YouTube audio as the fallback.
+- **Quality controls in the player** - see the active audio quality, prefer Dolby Atmos when available, and revert or upgrade quality from the player menu.
+- **Automix and crossfade** - DJ-style transitions between songs, with a mixing state shown in the player during transitions.
+- **Queue and playback controls** - shuffle, repeat, autoplay, song radio, next-track prefetch, volume normalization, and output device selection.
+- **Downloads** - save songs for offline playback.
 
 **Lyrics and interface**
-- **Synced lyrics** — timed lyrics with provider fallbacks, timing controls, romanization and translation options.
-- **Native Rust desktop UI** — a fast egui/rodio interface with system media controls, tray integration, and keyboard-friendly navigation.
-- **Discord Rich Presence** — show what you’re listening to on Discord.
-- **Last.fm scrobbling** — connect your Last.fm account in Settings.
+- **Synced lyrics** - timed lyrics with provider fallbacks, timing controls, romanization and translation options.
+- **Native Rust desktop UI** - a fast egui/rodio interface with system media controls, tray integration, and keyboard-friendly navigation.
+- **Discord Rich Presence** - show what you’re listening to on Discord.
+- **Last.fm scrobbling** - connect your Last.fm account in Settings.
 
 **Accounts and library**
-- **Google sign-in** — unlock your YouTube Music feed, likes, playlists, history and recommendations.
-- **Library and uploads** — access saved music and uploaded tracks where available.
-- **Listen Together / jams** — start or join a shared listening session.
-- **Spotify transfer** — bring playlists and liked music over from Spotify.
+- **Google sign-in** - unlock your YouTube Music feed, likes, playlists, history and recommendations.
+- **Library and uploads** - access saved music and uploaded tracks where available.
+- **Listen Together / jams** - start or join a shared listening session.
+- **Spotify transfer** - bring playlists and liked music over from Spotify.
 
 ## Installation
 
