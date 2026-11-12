@@ -871,12 +871,20 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let pad = 16.0;
     let run_w = if narrow { 112.0 } else { 184.0 };
     let right_w = 132.0;
-    let run_l = cap.left() + pad;
     let right_l = cap.right() - pad - right_w;
-    let lcd_l = run_l + run_w + 8.0;
-    let cover = Rect::from_center_size(pos2(lcd_l + 17.0, cy), Vec2::splat(34.0));
-    let text_l = cover.right() + 8.0;
-    let text_r = right_l - 6.0;
+    // Docked: the song on the left, the controls in the middle, the rest on the right.
+    // Floating: controls, then the song, then the rest.
+    let (run_l, cover, text_l, text_r) = if docked(app) {
+        let cover = Rect::from_center_size(pos2(cap.left() + pad + 22.0, cy), Vec2::splat(44.0));
+        let text_l = cover.right() + 12.0;
+        let run_l = (cap.center().x - (run_w - 8.0) / 2.0).max(text_l + 120.0).min(right_l - run_w - 8.0);
+        (run_l, cover, text_l, run_l - 18.0)
+    } else {
+        let run_l = cap.left() + pad;
+        let lcd_l = run_l + run_w + 8.0;
+        let cover = Rect::from_center_size(pos2(lcd_l + 17.0, cy), Vec2::splat(34.0));
+        (run_l, cover, cover.right() + 8.0, right_l - 6.0)
+    };
     let text_w = (text_r - text_l).max(20.0);
     let ink = |h: f32| {
         let c = theme::lerp_color(theme::text_dim(), theme::text(), h);

@@ -1328,10 +1328,12 @@ impl eframe::App for App {
                     .show(ui, |ui| shell::queue_drawer(self, ui));
             }
             // Lyrics beside the pages; Up next takes the place when it's open.
-            let l = theme::anim_bool(&ctx, "lyrics-drawer", self.lyrics_drawer && !self.queue_open && !self.np_open, 0.25);
+            // It leaves the pages at least 480 points, and stays shut when that leaves it too narrow.
+            let lyrics_w = (ui.available_rect_before_wrap().width() - 480.0).min(380.0);
+            let l = theme::anim_bool(&ctx, "lyrics-drawer", self.lyrics_drawer && !self.queue_open && !self.np_open && lyrics_w >= 260.0, 0.25);
             if l > 0.01 {
                 egui::Panel::right("lyrics-drawer").resizable(false)
-                    .exact_size(380.0 * l)
+                    .exact_size(lyrics_w.max(260.0) * l)
                     .frame(egui::Frame::new().fill(theme::panel(0.5)).inner_margin(egui::Margin { left: 20, right: 16, top: 16, bottom: 16 }))
                     .show_separator_line(false)
                     .show(ui, |ui| nowplaying::lyrics_drawer(self, ui, now));
