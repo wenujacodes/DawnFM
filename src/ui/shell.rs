@@ -531,7 +531,7 @@ pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
     let edit = ui.put(
         inner,
         egui::TextEdit::singleline(&mut app.search_text)
-            .hint_text(egui::RichText::new("Search songs, albums, artists, podcasts").color(theme::text_faint()))
+            .hint_text(egui::RichText::new("Search").color(theme::text_faint()))
             .font(theme::regular(15.0))
             .frame(egui::Frame::NONE)
             .align(egui::Align2::LEFT_CENTER)
