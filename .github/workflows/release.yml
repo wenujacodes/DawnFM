@@ -1,0 +1,79 @@
+name: Release
+
+# Push a tag like v2.0.0 to build the app for Apple Silicon and Intel and publish
+# a GitHub Release with a .dmg and a .zip for each.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.arch }}
+
+      - name: Work out the version
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: cargo test --locked --release
+
+      - name: Build
+        run: cargo build --locked --release
+
+      - name: Make the app bundle
+        run: sh macos/bundle.sh target/release/bitchord "${{ steps.version.outputs.value }}" out
+
+      - name: Package .dmg and .zip
+        run: |
+          v="${{ steps.version.outputs.value }}"
+          name="BitChord-$v-macos-${{ matrix.arch }}"
+          mkdir -p dist dmg
+          ditto -c -k --keepParent out/bitchord.app "dist/$name.zip"
+          cp -R out/bitchord.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "BitChord" -srcfolder dmg -ov -format UDZO "dist/$name.dmg"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/*
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "BitChord ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            --notes "The app is signed ad hoc, so macOS asks before the first launch: right-click bitchord.app and choose Open. Pick arm64 for Apple Silicon Macs and x64 for Intel Macs."
