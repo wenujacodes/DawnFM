@@ -2,8 +2,8 @@
 //!
 //! A worker thread owns the IPC pipe so a missing or restarting Discord never blocks the
 //! UI. The UI sends the wanted state whenever it changes; the worker coalesces bursts
-//! (Discord rate-limits activity updates) and reconnects every 15 s while Discord is
-//! closed.
+//! (Discord rate-limits activity updates). While Discord is closed it only looks for
+//! Discord's socket every 15 s, and backs off when the socket is there but won't connect.
 
 use std::time::{Duration, Instant};
 
@@ -19,6 +19,27 @@ const CLIENT_ID: &str = "1521756469433991299";
 const APP_NAME: &str = "BitChord PC Continued";
 
 const RETRY: Duration = Duration::from_secs(15);
+/// The longest wait between failed connects to a socket that exists.
+const MAX_RETRY: Duration = Duration::from_secs(300);
+
+/// Where the crate looks for `discord-ipc-0`..`9`, so we can skip `connect` (and its
+/// warning) while Discord isn't running.
+const ENV_KEYS: [&str; 4] = ["XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"];
+const APP_SUBPATHS: [&str; 7] = [
+    "",
+    "app/com.discordapp.Discord/",
+    "app/dev.vencord.Vesktop/",
+    ".flatpak/com.discordapp.Discord/xdg-run/",
+    ".flatpak/dev.vencord.Vesktop/xdg-run/",
+    "snap.discord-canary/",
+    "snap.discord/",
+];
+
+fn socket_exists() -> bool {
+    ENV_KEYS.iter().filter_map(|k| std::env::var_os(k)).map(std::path::PathBuf::from).filter(|b| b.is_dir()).any(|base| {
+        (0..10).any(|i| APP_SUBPATHS.iter().any(|sub| base.join(sub).join(format!("discord-ipc-{i}")).exists()))
+    })
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Presence {
@@ -55,6 +76,7 @@ fn run(id: &str, rx: Receiver<Option<Presence>>) {
     let mut want: Option<Presence> = None;
     let mut dirty = false;
     let mut next_try = Instant::now();
+    let mut backoff = RETRY;
     loop {
         match rx.recv_timeout(RETRY) {
             Ok(p) => {
@@ -70,7 +92,7 @@ fn run(id: &str, rx: Receiver<Option<Presence>>) {
             continue;
         }
         if client.is_none() {
-            if Instant::now() < next_try {
+            if Instant::now() < next_try || !socket_exists() {
                 continue;
             }
             let mut c = DiscordIpcClient::new(id);
@@ -78,9 +100,12 @@ fn run(id: &str, rx: Receiver<Option<Presence>>) {
                 Ok(()) => {
                     log::info!("discord: connected");
                     client = Some(c);
+                    backoff = RETRY;
                 }
                 Err(_) => {
-                    next_try = Instant::now() + RETRY;
+                    // The socket is there but won't answer (Discord starting, or a stale one).
+                    next_try = Instant::now() + backoff;
+                    backoff = (backoff * 2).min(MAX_RETRY);
                     continue;
                 }
             }
