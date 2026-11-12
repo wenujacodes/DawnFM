@@ -1201,6 +1201,7 @@ impl eframe::App for App {
         self.window_hidden = self.tray.is_some() || ctx.input(|i| i.viewport().minimized == Some(true));
         self.sync_discord();
         self.sync_lastfm();
+        self.sync_dock();
         self.sync_server_queue(ctx, now);
         self.tick_sleep(ctx);
         self.tick_updates(ctx, now);

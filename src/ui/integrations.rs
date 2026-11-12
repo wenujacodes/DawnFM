@@ -96,6 +96,18 @@ impl App {
         }
     }
 
+    /// The Dock menu: show what's playing, and act on its clicks like the media keys.
+    pub(super) fn sync_dock(&mut self) {
+        crate::dock::set_state(self.playing_track().map(|t| t.title.as_str()), self.playing() || self.buffering);
+        for cmd in crate::dock::take() {
+            match cmd {
+                crate::dock::Cmd::Toggle => self.toggle(),
+                crate::dock::Cmd::Next => self.next(),
+                crate::dock::Cmd::Prev => self.prev(),
+            }
+        }
+    }
+
     pub(super) fn lastfm_sign_in(&mut self) {
         if self.lastfm_busy.swap(true, Ordering::Relaxed) {
             return;

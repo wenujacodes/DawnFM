@@ -11,6 +11,7 @@ mod audio;
 mod backend;
 mod bidi;
 mod deeplink;
+mod dock;
 mod discord;
 mod dash;
 mod downloads;
@@ -145,6 +146,8 @@ fn main() -> eframe::Result {
 
             // Jam links (the Apple Event handler in `deeplink`) wake the UI through this.
             deeplink::listen(wake);
+            // The Dock icon's menu: winit's delegate is set up by now.
+            dock::install(wake);
             // Keep `ytm-rs:` links pointing at this copy; dev builds leave it alone
             // (even with YTM_UPDATE_FORCE).
             if update::installed() && !cfg!(debug_assertions) {
