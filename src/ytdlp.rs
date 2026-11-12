@@ -14,6 +14,9 @@ use serde_json::Value;
 
 const BIN: &str = "yt-dlp";
 const URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos";
+/// The release's checksums, `<hex>  <file>` per line.
+const SUMS_URL: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS";
+const ASSET: &str = "yt-dlp_macos";
 
 const MAX_AGE: Duration = Duration::from_secs(7 * 24 * 3600);
 
@@ -36,16 +39,46 @@ async fn ensure(http: &reqwest::Client, data_dir: &Path) -> anyhow::Result<PathB
         return Ok(bin);
     }
     log::info!("downloading yt-dlp");
+    match download(http).await {
+        Ok(bytes) => install(&bin, &bytes)?,
+        // The copy already there was checked when it was installed: keep using it.
+        Err(e) if bin.is_file() => log::warn!("yt-dlp update failed, keeping the current one: {e:#}"),
+        Err(e) => return Err(e),
+    }
+    Ok(bin)
+}
+
+/// The latest yt-dlp, checked against the release's SHA2-256SUMS.
+async fn download(http: &reqwest::Client) -> anyhow::Result<bytes::Bytes> {
+    use sha2::Digest;
+    let sums = http.get(SUMS_URL).timeout(Duration::from_secs(30)).send().await?.error_for_status()?.text().await?;
+    let want = sum_for(&sums, ASSET).ok_or_else(|| anyhow::anyhow!("no SHA-256 for {ASSET} in yt-dlp's SHA2-256SUMS"))?;
     let bytes = http.get(URL).timeout(Duration::from_secs(120)).send().await?.error_for_status()?.bytes().await?;
     anyhow::ensure!(bytes.len() > 1_000_000, "yt-dlp download looks truncated ({} bytes)", bytes.len());
+    let got: String = sha2::Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+    anyhow::ensure!(got == want, "yt-dlp download doesn't match its SHA-256 (expected {want}, got {got})");
+    Ok(bytes)
+}
+
+fn install(bin: &Path, bytes: &[u8]) -> anyhow::Result<()> {
     let tmp = bin.with_extension("part");
-    std::fs::write(&tmp, &bytes)?;
+    std::fs::write(&tmp, bytes)?;
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
     }
-    std::fs::rename(&tmp, &bin)?;
-    Ok(bin)
+    std::fs::rename(&tmp, bin)?;
+    Ok(())
+}
+
+/// The lowercase hex SHA-256 for `file` in a `sha256sum`-style list.
+fn sum_for(sums: &str, file: &str) -> Option<String> {
+    sums.lines().find_map(|l| {
+        let (hex, name) = l.trim().split_once(char::is_whitespace)?;
+        // `*name` is binary mode in sha256sum's format.
+        let name = name.trim_start().trim_start_matches('*');
+        (name == file && hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then(|| hex.to_ascii_lowercase())
+    })
 }
 
 pub async fn resolve(http: &reqwest::Client, data_dir: &Path, cookie: &str, video_id: &str) -> anyhow::Result<Stream> {
@@ -139,4 +172,23 @@ fn run(bin: &Path, data_dir: &Path, video_id: &str, cookie: &str) -> anyhow::Res
         duration_ms: v["duration"].as_f64().map_or(0, |d| (d * 1000.0) as u64),
         user_agent: v["http_headers"]["User-Agent"].as_str().unwrap_or_default().to_owned(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn sums_file() {
+        let sums = "\
+1111111111111111111111111111111111111111111111111111111111111111  yt-dlp
+2222222222222222222222222222222222222222222222222222222222222222  yt-dlp_macos.zip
+ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789  yt-dlp_macos
+3333333333333333333333333333333333333333333333333333333333333333  yt-dlp_macos_legacy
+";
+        assert_eq!(super::sum_for(sums, "yt-dlp_macos").as_deref(), Some("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"));
+        assert_eq!(super::sum_for(sums, "yt-dlp").as_deref(), Some("1111111111111111111111111111111111111111111111111111111111111111"));
+        assert_eq!(super::sum_for("4444444444444444444444444444444444444444444444444444444444444444 *yt-dlp_macos\n", "yt-dlp_macos").map(|h| h.len()), Some(64));
+        assert_eq!(super::sum_for(sums, "yt-dlp.exe"), None);
+        assert_eq!(super::sum_for("abcd  yt-dlp_macos\n", "yt-dlp_macos"), None);
+        assert_eq!(super::sum_for("", "yt-dlp_macos"), None);
+    }
 }
