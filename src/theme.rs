@@ -767,6 +767,9 @@ pub fn install_style(ctx: &egui::Context) {
         s.spacing.item_spacing = egui::vec2(8.0, 6.0);
         s.spacing.button_padding = egui::vec2(14.0, 7.0);
         s.spacing.scroll = egui::style::ScrollStyle::floating();
+        // Stop hard at the ends of every scroller: egui otherwise lets a trackpad (and
+        // its momentum) stretch past the content and spring back. Coasting stays.
+        s.spacing.scroll.kinetic.rubber_band = false;
         s.text_styles.insert(egui::TextStyle::Body, regular(14.0));
         s.text_styles.insert(egui::TextStyle::Button, semibold(14.0));
         s.text_styles.insert(egui::TextStyle::Heading, bold(22.0));
