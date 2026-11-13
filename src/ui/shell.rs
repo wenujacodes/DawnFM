@@ -163,10 +163,10 @@ pub fn sidebar_collapse(app: &App, ctx: &egui::Context) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
-/// A button on the sidebar's top line: a rounded rectangle under the pointer, with
-/// `paint` drawing its mark at the centre in the given colour.
-fn top_button(ui: &mut Ui, name: &str, paint: impl FnOnce(&Ui, Pos2, Color32)) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(vec2(28.0, 26.0), Sense::click());
+/// A button on the sidebar's top line, at `rect`: a rounded rectangle under the
+/// pointer, with `paint` drawing its mark at the centre in the given colour.
+fn top_button(ui: &mut Ui, rect: Rect, key: &str, name: &str, paint: impl FnOnce(&Ui, Pos2, Color32)) -> bool {
+    let resp = ui.interact(rect, ui.scope_id().with(("side-top", key)), Sense::click());
     let resp = named(resp, name).on_hover_text(name).on_hover_cursor(egui::CursorIcon::PointingHand);
     let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
     if h > 0.0 {
@@ -177,8 +177,8 @@ fn top_button(ui: &mut Ui, name: &str, paint: impl FnOnce(&Ui, Pos2, Color32)) -
 }
 
 /// The chevron pair that walks the page history, beside the sidebar button.
-fn history_button(ui: &mut Ui, glyph: char, name: &str) -> bool {
-    top_button(ui, name, |ui, at, c| icon_at(ui, at, glyph, 16.0, c))
+fn history_button(ui: &mut Ui, rect: Rect, glyph: char, name: &str) -> bool {
+    top_button(ui, rect, name, name, |ui, at, c| icon_at(ui, at, glyph, 16.0, c))
 }
 
 /// The sidebar button's mark: a window outline with its sidebar ruled off.
@@ -200,31 +200,32 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     // Content width when expanded: text keeps its truncation while the panel narrows.
     let full_w = ui.available_width() + (SIDEBAR_W - RAIL_W) * t;
 
-    // The sidebar button and the page history beside it, right-aligned on the top line.
-    // On the rail the button comes to the icons' column and the history fades away.
-    ui.horizontal(|ui| {
-        ui.set_min_height(32.0);
-        ui.spacing_mut().item_spacing.x = 0.0;
-        const GROUP: f32 = 28.0 * 3.0 + 6.0 + 2.0;
-        ui.add_space(((ui.available_width() - GROUP) * (1.0 - t)).max(0.0) + (ICON_X - 14.0) * t);
-        if top_button(ui, if collapsed { "Show sidebar" } else { "Hide sidebar" }, sidebar_mark) {
-            app.sidebar_collapsed = !collapsed;
+    // The sidebar button and the page history beside it, on the macOS window buttons'
+    // line and right after them (the buttons' centres are 14 points down, the last one
+    // ending some 62 in). The rail is no wider than those buttons, so there the sidebar
+    // button drops under them into the icons' column and the history fades away. A
+    // floating sidebar starts beside the window buttons, not under: it keeps the row.
+    let top = ui.cursor().min;
+    let screen = ui.ctx().content_rect();
+    let below = pos2(top.x + ICON_X - 14.0, top.y + 3.0);
+    let on_line = top.y - screen.top() >= 36.0;
+    let at = if on_line { pos2(screen.left() + 76.0, screen.top() + 1.0).lerp(below, t) } else { below };
+    let button = |i: usize| Rect::from_min_size(at + vec2([0.0, 34.0, 64.0][i], 0.0), vec2(28.0, 26.0));
+    if top_button(ui, button(0), "toggle", if collapsed { "Show sidebar" } else { "Hide sidebar" }, sidebar_mark) {
+        app.sidebar_collapsed = !collapsed;
+    }
+    if a > 0.0 {
+        let mut hui = ui.new_child(egui::UiBuilder::new().max_rect(ui.max_rect()));
+        hui.set_opacity(a);
+        if history_button(&mut hui, button(1), icon::CHEVRON_LEFT, "Back") {
+            app.nav_back();
         }
-        if a > 0.0 {
-            ui.add_space(6.0);
-            ui.scope(|ui| {
-                ui.set_opacity(a);
-                if history_button(ui, icon::CHEVRON_LEFT, "Back") {
-                    app.nav_back();
-                }
-                ui.add_space(2.0);
-                if history_button(ui, icon::CHEVRON_RIGHT, "Forward") {
-                    app.nav_forward();
-                }
-            });
+        if history_button(&mut hui, button(2), icon::CHEVRON_RIGHT, "Forward") {
+            app.nav_forward();
         }
-    });
-    ui.add_space(14.0);
+    }
+    // The row's own room: all of it under the window buttons, none beside them.
+    ui.add_space(if on_line { 4.0 + 42.0 * t } else { 46.0 });
 
     let mut go_to: Option<Page> = None;
     let look = NavLook::of(app);
