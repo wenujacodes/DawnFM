@@ -568,24 +568,28 @@ fn card_menu_contents(ui: &mut Ui, c: &Card, liked: bool, acts: &mut Vec<Action>
     }
 }
 
+/// A menu's row, with a macOS menu's measures: 24 points tall, 13-point text after a
+/// leading mark, and the accent filling the row under the pointer, its text white.
 fn menu_row(ui: &mut Ui, label: &str, draw: impl FnOnce(&Ui, Pos2, Color32)) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
-    let response = named(response, label).on_hover_cursor(egui::CursorIcon::PointingHand);
-    if response.hovered() {
-        ui.painter().rect_filled(rect, 7.0, theme::glass(0.12));
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+    let response = named(response, label);
+    let over = response.hovered();
+    if over {
+        let accent = ui.ctx().data(|d| d.get_temp::<Color32>(egui::Id::unique("accent"))).unwrap_or(theme::RED);
+        ui.painter().rect_filled(rect, 5.0, accent);
     }
-    let color = if response.hovered() { theme::text() } else { theme::text_dim() };
-    draw(ui, pos2(rect.right() - 19.0, rect.center().y), color);
-    ui.painter().text(pos2(rect.left() + 12.0, rect.center().y), Align2::LEFT_CENTER, label, theme::regular(14.0), theme::text());
+    let color = if over { Color32::WHITE } else { theme::text() };
+    draw(ui, pos2(rect.left() + 15.0, rect.center().y), if over { Color32::WHITE } else { theme::text_dim() });
+    ui.painter().text(pos2(rect.left() + 32.0, rect.center().y), Align2::LEFT_CENTER, label, theme::regular(13.0), color);
     if response.clicked() { ui.close(); }
     response.clicked()
 }
 
 pub fn menu_action(ui: &mut Ui, glyph: Option<char>, label: &str) -> bool {
     menu_row(ui, label, |ui, at, color| match glyph {
-        Some(glyph) => icon_at(ui, at, glyph, 16.0, color),
+        Some(glyph) => icon_at(ui, at, glyph, 14.0, color),
         None => {
-            ui.painter().text(at, Align2::CENTER_CENTER, "↗", theme::semibold(17.0), color);
+            ui.painter().text(at, Align2::CENTER_CENTER, "↗", theme::semibold(14.0), color);
         }
     })
 }
@@ -594,7 +598,7 @@ pub fn menu_action(ui: &mut Ui, glyph: Option<char>, label: &str) -> bool {
 fn menu_action_star(ui: &mut Ui, liked: bool, label: &str) -> bool {
     menu_row(ui, label, |ui, at, color| {
         let glyph = if liked { super::glyphs::STAR_FILLED } else { super::glyphs::STAR };
-        super::glyphs::draw(ui, at, 16.0, glyph, color);
+        super::glyphs::draw(ui, at, 15.0, glyph, color);
     })
 }
 
