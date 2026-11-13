@@ -208,7 +208,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         let s = theme::anim_bool(ui.ctx(), resp.id.with("s"), selected, 0.2);
         let icon_fg = nav_bg(ui, look, rect, h, s);
         paint(ui, pos2(rect.left() + ICON_X, rect.center().y), icon_fg);
-        let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
+        let fg = theme::label();
         let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
         ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, fg);
         if resp.clicked() {
@@ -242,7 +242,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         let s = theme::anim_bool(ui.ctx(), resp.id.with("s"), selected, 0.2);
         let icon_fg = nav_bg(ui, look, rect, h, s);
         glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), size, glyph, icon_fg);
-        let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
+        let fg = theme::label();
         let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
         ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, fg);
         if resp.clicked() {
@@ -360,7 +360,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                 let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(22.0));
                 paint_cover(ui, img, &c.thumbs, theme::thumb_radius(), 1.0);
                 let w = full_w - 54.0;
-                let fg = if selected { theme::text() } else { theme::lerp_color(theme::text_dim(), theme::text(), h) };
+                let fg = theme::label();
                 text_at(ui, pos2(rect.left() + 44.0, rect.center().y - 8.5), &c.title, theme::regular(13.0), fg, w);
                 egui::Popup::context_menu(&resp).show(|ui| {
                     ui.set_min_width(190.0);

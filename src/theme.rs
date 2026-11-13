@@ -43,6 +43,11 @@ pub fn text() -> Color32 {
     if light() { TEXT_LIGHT } else { TEXT }
 }
 
+/// Sidebar item labels: pure black on light pages, pure white on dark ones.
+pub fn label() -> Color32 {
+    if light() { Color32::BLACK } else { Color32::WHITE }
+}
+
 /// Text and icons on a fill of the main text colour (a primary button, a selected chip).
 pub fn on_text() -> Color32 {
     if light() { Color32::WHITE } else { Color32::from_gray(15) }
