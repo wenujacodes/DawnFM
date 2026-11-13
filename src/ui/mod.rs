@@ -1106,7 +1106,7 @@ impl App {
     /// Height of the bottom player area: the capsule's 56 points plus the margin it
     /// floats on.
     fn bar_height(&self) -> f32 {
-        if shell::docked(self) { shell::DOCKED_H } else { 72.0 }
+        if shell::docked(self) { shell::DOCKED_H } else { 96.0 }
     }
 
     fn toast(&mut self, msg: impl Into<String>) {
