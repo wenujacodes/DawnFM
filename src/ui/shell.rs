@@ -163,17 +163,30 @@ pub fn sidebar_collapse(app: &App, ctx: &egui::Context) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
-/// The small chevron pair that walks the page history, on the logo's line at the rail's
-/// top right.
-fn history_button(ui: &mut Ui, glyph: char, name: &str) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
+/// A button on the sidebar's top line: a rounded rectangle under the pointer, with
+/// `paint` drawing its mark at the centre in the given colour.
+fn top_button(ui: &mut Ui, name: &str, paint: impl FnOnce(&Ui, Pos2, Color32)) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(vec2(28.0, 26.0), Sense::click());
     let resp = named(resp, name).on_hover_text(name).on_hover_cursor(egui::CursorIcon::PointingHand);
     let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
     if h > 0.0 {
-        ui.painter().circle_filled(rect.center(), 11.0, theme::glass(0.10 * h));
+        ui.painter().rect_filled(rect, 6.0, theme::glass(0.10 * h));
     }
-    icon_at(ui, rect.center(), glyph, 16.0, theme::lerp_color(theme::text_dim(), theme::text(), h));
+    paint(ui, rect.center(), theme::lerp_color(theme::text_dim(), theme::text(), h));
     resp.clicked()
+}
+
+/// The chevron pair that walks the page history, beside the sidebar button.
+fn history_button(ui: &mut Ui, glyph: char, name: &str) -> bool {
+    top_button(ui, name, |ui, at, c| icon_at(ui, at, glyph, 16.0, c))
+}
+
+/// The sidebar button's mark: a window outline with its sidebar ruled off.
+fn sidebar_mark(ui: &Ui, at: Pos2, c: Color32) {
+    let r = Rect::from_center_size(at, vec2(17.0, 13.0));
+    let stroke = egui::Stroke::new(1.5, c);
+    ui.painter().rect_stroke(r, 3.5, stroke, egui::StrokeKind::Inside);
+    ui.painter().vline(r.left() + 6.0, (r.top() + 1.0)..=(r.bottom() - 1.0), stroke);
 }
 
 /// One layout for both states, so collapsing animates: the panel narrows while icons
@@ -187,19 +200,28 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     // Content width when expanded: text keeps its truncation while the panel narrows.
     let full_w = ui.available_width() + (SIDEBAR_W - RAIL_W) * t;
 
-    // The page history, right-aligned on the top line (no logo: the row keeps its height).
+    // The sidebar button and the page history beside it, right-aligned on the top line.
+    // On the rail the button comes to the icons' column and the history fades away.
     ui.horizontal(|ui| {
+        ui.set_min_height(32.0);
         ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_space(8.0);
-        ui.allocate_exact_size(vec2(32.0, 32.0), Sense::hover());
-        // Drifts to the rail's edge as it collapses.
-        ui.add_space(((ui.available_width() - 48.0) * (1.0 - t)).max(0.0));
-        ui.spacing_mut().item_spacing.x = 4.0;
-        if history_button(ui, icon::CHEVRON_LEFT, "Back") {
-            app.nav_back();
+        const GROUP: f32 = 28.0 * 3.0 + 6.0 + 2.0;
+        ui.add_space(((ui.available_width() - GROUP) * (1.0 - t)).max(0.0) + (ICON_X - 14.0) * t);
+        if top_button(ui, if collapsed { "Show sidebar" } else { "Hide sidebar" }, sidebar_mark) {
+            app.sidebar_collapsed = !collapsed;
         }
-        if history_button(ui, icon::CHEVRON_RIGHT, "Forward") {
-            app.nav_forward();
+        if a > 0.0 {
+            ui.add_space(6.0);
+            ui.scope(|ui| {
+                ui.set_opacity(a);
+                if history_button(ui, icon::CHEVRON_LEFT, "Back") {
+                    app.nav_back();
+                }
+                ui.add_space(2.0);
+                if history_button(ui, icon::CHEVRON_RIGHT, "Forward") {
+                    app.nav_forward();
+                }
+            });
         }
     });
     ui.add_space(14.0);
