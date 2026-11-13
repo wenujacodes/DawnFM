@@ -1061,15 +1061,6 @@ impl App {
         None
     }
 
-    /// A new link is a different service: what was read from the old one is no longer
-    /// evidence.
-    pub(super) fn signature_reset(&mut self) {
-        self.signature_tex.clear();
-        self.signature_images.clear();
-        self.signature_missed.clear();
-        self.signature_waiting.clear();
-    }
-
     /// The newest frame of a motion clip, started the first time it's seen. The decoders
     /// on screen are capped so old pages don't leave threads behind.
     fn motion_sprite(&mut self, ctx: &egui::Context, key: String, url: &str, max_width: u32) -> Option<widgets::MotionSprite> {

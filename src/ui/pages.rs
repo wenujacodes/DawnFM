@@ -1192,7 +1192,6 @@ fn settings_body(app: &mut App, ui: &mut Ui) {
     settings_playback(app, ui);
     settings_downloads(ui);
     settings_lyrics(app, ui);
-    settings_artists(app, ui);
     settings_appearance(app, ui);
     settings_window(app, ui);
     settings_connections(app, ui);
@@ -1593,20 +1592,6 @@ fn settings_lyrics(app: &mut App, ui: &mut Ui) {
     });
 }
 
-/// Settings › Artist pages: the listener's own signature service.
-fn settings_artists(app: &mut App, ui: &mut Ui) {
-    section_label(ui, "Artist pages", None);
-    settings_card(ui, |ui| {
-        setting_row(ui, "Signature service", Some("A link to your own signature API. Artists get their handwritten signature, with “Signed by …” above it — beside About when Apple also letters them a wordmark; without a signature, their name is set in type."), |_| {});
-        divider(ui);
-        ui.add_space(12.0);
-        if super::text_field(ui, "Link", &mut app.signature_api, false, "https://your-signature-service.example").changed() {
-            app.signature_reset();
-        }
-        ui.add_space(12.0);
-    });
-}
-
 /// Settings › Appearance.
 fn settings_appearance(app: &mut App, ui: &mut Ui) {
     section_label(ui, "Appearance", None);
@@ -1664,10 +1649,6 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
             toggle(ui, &mut app.anim_bg, "Animated background");
         });
         divider(ui);
-        setting_row(ui, "Pulse with the music", Some("The background swells with the beat."), |ui| {
-            toggle(ui, &mut app.reactive_bg, "Pulse with the music");
-        });
-        divider(ui);
         setting_row(ui, "Size", Some("Everything in the app, larger or smaller. ⌘+ and ⌘− do the same from anywhere, and ⌘0 goes back to 100%."), |ui| {
             // Right to left: larger, the size (a click resets it), smaller.
             let ctx = ui.ctx().clone();
@@ -1697,25 +1678,6 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
             }
             if step(ui, false, z > *super::shell::ZOOM_RANGE.start() + 0.001) {
                 super::shell::zoom_step(&ctx, false);
-            }
-        });
-        divider(ui);
-        setting_row(ui, "Font", Some("For the whole app and the lyrics. Any font installed on this PC works, e.g. one made for your language."), |ui| {
-            if let Some(name) = font_picker(ui) {
-                theme::set_font_choice(&name);
-                app.chrome_applied = None;
-            }
-        });
-        divider(ui);
-        let hidden = app.hidden_playlists.len();
-        let desc = match hidden {
-            0 => "Nothing hidden. Right-click a playlist in the sidebar to hide it from there.".to_owned(),
-            1 => "1 playlist is hidden from the sidebar. Right-click a playlist there to hide or show it.".to_owned(),
-            n => format!("{} playlists are hidden from the sidebar. Right-click a playlist there to hide or show it.", thousands(n as u64)),
-        };
-        setting_row(ui, "Hidden playlists", Some(&desc), |ui| {
-            if hidden > 0 && pill(ui, "Show all", None, false).clicked() {
-                app.hidden_playlists.clear();
             }
         });
     });
@@ -1947,59 +1909,6 @@ fn network(app: &mut App, ui: &mut Ui) {
     }
 }
 
-/// The font setting: the theme's own, a bundled face, or one installed on this PC.
-/// Returns the new choice ("" for the theme's).
-fn font_picker(ui: &mut Ui) -> Option<String> {
-    let current = theme::font_choice();
-    let btn = dropdown_button(ui, if current.is_empty() { "Theme's font" } else { &current }, 220.0, "Font");
-    let just_opened = btn.clicked();
-    let mut picked = None;
-    egui::Popup::menu(&btn).show(|ui| {
-        ui.set_width(220.0);
-        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-            ui.add_space(4.0);
-            let mut row = |ui: &mut Ui, label: &str, value: &str| {
-                let on = current.eq_ignore_ascii_case(value);
-                let r = option_row(ui, label, on);
-                if on && just_opened {
-                    r.scroll_to_me(Some(egui::Align::Center));
-                }
-                if r.clicked() {
-                    picked = Some(value.to_owned());
-                    ui.close();
-                }
-            };
-            row(ui, "Theme's font", "");
-            for name in theme::BUNDLED_FONTS {
-                row(ui, name, name);
-            }
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.add_space(12.0);
-                ui.label(RichText::new("Installed on this PC").font(theme::semibold(12.0)).color(theme::text_faint()));
-            });
-            ui.add_space(4.0);
-            let ctx = ui.ctx().clone();
-            match theme::installed_fonts(move || ctx.request_repaint()) {
-                Some(fonts) => {
-                    for f in fonts {
-                        row(ui, &f.name, &f.name);
-                    }
-                }
-                None => {
-                    ui.horizontal(|ui| {
-                        ui.add_space(12.0);
-                        ui.label(RichText::new("Looking for fonts…").font(theme::regular(13.0)).color(theme::text_dim()));
-                    });
-                }
-            }
-            ui.add_space(4.0);
-        });
-    });
-    picked.filter(|p| *p != current)
-}
-
 const SYSTEM_DEFAULT: &str = "System default";
 
 fn output_device_picker(app: &mut App, ui: &mut Ui) {
@@ -2069,19 +1978,6 @@ fn option_row(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
     }
     widgets::text_at(ui, pos2(rect.left() + 28.0, rect.center().y - 8.5), label, theme::regular(13.0), fg, rect.width() - 36.0);
     resp
-}
-
-/// 12345 -> "12,345".
-pub(super) fn thousands(n: u64) -> String {
-    let s = n.to_string();
-    let mut out = String::new();
-    for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
 }
 
 /// Small heading above a settings card, with an optional value on the right.

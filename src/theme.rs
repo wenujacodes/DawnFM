@@ -345,9 +345,6 @@ const LYRIC_FONTS: &[(&str, [&[u8]; 3])] = &[
     ]),
 ];
 
-/// The bundled faces, by the names the font setting shows and stores.
-pub const BUNDLED_FONTS: &[&str] = &["SF Pro Display", "Inter", "DM Sans", "Figtree", "Google Sans Flex", "Instrument Sans"];
-
 /// The bundled font a preset font name refers to. Fonts that can't be bundled
 /// (Spotify's) map to the closest open one; unknown names to Inter.
 fn lyric_key(name: &str) -> Option<&'static str> {
@@ -474,23 +471,6 @@ struct SysFace {
 }
 
 static INSTALLED_FONTS: std::sync::OnceLock<Vec<SysFamily>> = std::sync::OnceLock::new();
-static SCANNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Text fonts installed on this PC, sorted by name, without the bundled ones. `None`
-/// while a background scan (started by the first call) runs; `done` runs after it.
-pub fn installed_fonts(done: impl FnOnce() + Send + 'static) -> Option<&'static [SysFamily]> {
-    if let Some(v) = INSTALLED_FONTS.get() {
-        return Some(v);
-    }
-    if !SCANNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
-        std::thread::spawn(move || {
-            let _ = INSTALLED_FONTS.set(scan_fonts());
-            done();
-        });
-    }
-    None
-}
-
 fn font_dirs() -> Vec<std::path::PathBuf> {
     let mut dirs: Vec<std::path::PathBuf> = ["/System/Library/Fonts", "/Library/Fonts"].map(Into::into).into();
     if let Some(home) = std::env::var_os("HOME") {
