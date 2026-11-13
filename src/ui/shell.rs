@@ -828,11 +828,11 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     }
     let ctx = ui.ctx().clone();
     let cap = if docked(app) {
-        // Docked: the app's own background, no strip of its own. The page fades into it
-        // over the top part, so rows scrolling under the controls don't show through.
+        // Docked: the app's own background, opaque, so rows scrolling under the controls
+        // don't show through.
         let cap = Rect::from_min_max(pos2(full.left(), full.bottom() - DOCKED_H), full.max);
         let base = if theme::light() { theme::bg() } else { app.look().solid() };
-        ui.painter().rect_filled(cap, 0.0, base.gamma_multiply(0.94));
+        ui.painter().rect_filled(cap, 0.0, base);
         cap.shrink2(vec2(12.0, 0.0))
     } else {
         if frosted {
