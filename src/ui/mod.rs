@@ -1298,6 +1298,11 @@ impl eframe::App for App {
         if !self.fullscreen && !covered {
             // The top of the window, down to the search box's row: what's on it comes after.
             titlebar::drag_area(ui, egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), titlebar::HEIGHT)), "main");
+            // And the sidebar under it, down the window: its empty parts move the window
+            // too (a double-click there does nothing).
+            let side_w = shell::SIDEBAR_W - (shell::SIDEBAR_W - shell::RAIL_W) * shell::sidebar_collapse(self, &ctx);
+            let side = egui::Rect::from_min_max(egui::pos2(screen.left(), screen.top() + titlebar::HEIGHT), egui::pos2(screen.left() + side_w, screen.bottom()));
+            titlebar::drag_strip(ui, side, "sidebar");
         }
         if !self.fullscreen && covered {
             // Now playing hides the pages: the player bar keeps its full-width place.
