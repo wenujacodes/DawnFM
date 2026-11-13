@@ -108,7 +108,7 @@ pub fn background(app: &mut App, ui: &mut Ui, screen: Rect, now: f64, only: Opti
         painter.rect_filled(screen, 0.0, Color32::from_white_alpha(212));
     } else if mode != BgMode::Solid {
         // Keep text readable: darken toward the bottom and under the sidebar.
-        vgradient(&painter, screen, theme::shade(0.12), theme::shade(0.55));
+        vgradient(&painter, screen, theme::shade(0.06), theme::shade(0.35));
     }
 }
 
