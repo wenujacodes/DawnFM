@@ -376,7 +376,9 @@ impl Preset {
             accent: DEFAULT_ACCENT.into(),
             // Now playing: the cover fills the height on the left and fades into the
             // lyrics on the right, the song and its controls on a card over it.
-            background: Background { mode: BgMode::CoverFullbleed, solid: "#0b090b".into(), page_dim: 0.45, ..Default::default() },
+            // The cover shows close to its own brightness: the card and the fade carry
+            // the text, so it needs only a light scrim.
+            background: Background { mode: BgMode::CoverFullbleed, solid: "#0b090b".into(), page_dim: 0.45, np_dim: 1.0, scrim: 0.1, ..Default::default() },
             lyrics: LyricStyle { weight: Weight::Bold, size: 1.15, inactive_alpha: 0.3, ..Default::default() },
             cover: CoverStyle { layout: Layout::LyricsOnly, radius: 10.0, ..Default::default() },
             chrome: Chrome { glass: 0.9, radius: 10.0, player_bar: PlayerBar::Docked },
