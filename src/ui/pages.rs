@@ -216,7 +216,7 @@ fn card_row(ui: &mut Ui, id: &str, title: &str, cards: &[Card], acts: &mut Vec<A
     if cards.is_empty() {
         return;
     }
-    let (l, r) = shelf_header(ui, title, None, None, true);
+    let (l, r) = shelf_header(ui, id, title, None, None, true);
     let nudge = r as i32 - l as i32;
     let tile = feed_tile(ui, true);
     h_scroll(ui, id, nudge, cards.len(), tile, 20.0, |ui| {
@@ -231,7 +231,7 @@ fn card_row(ui: &mut Ui, id: &str, title: &str, cards: &[Card], acts: &mut Vec<A
 /// song starts its radio. Returns whether the arrows reached the end.
 #[allow(clippy::too_many_arguments)]
 fn song_grid(ui: &mut Ui, rows_ctx: &Rows, liked: &HashSet<String>, acts: &mut Vec<Action>, id: &str, title: &str, strap: Option<&str>, tracks: &[Track], rows: usize) -> bool {
-    let (l, r) = shelf_header(ui, title, strap, None, true);
+    let (l, r) = shelf_header(ui, id, title, strap, None, true);
     let nudge = r as i32 - l as i32;
     let col_w = feed_tile(ui, false);
     let mut picked = None;
@@ -405,7 +405,7 @@ fn home(app: &mut App, ui: &mut Ui, now: f64) {
         match &s.kind {
             ShelfKind::Cards(cards) => {
                 let (strap, thumb) = if s.title == "Listen again" { (None, None) } else { (s.strapline.as_deref(), s.strap_thumb.as_deref()) };
-                let (l, r) = shelf_header(ui, &s.title, strap, thumb, true);
+                let (l, r) = shelf_header(ui, &id, &s.title, strap, thumb, true);
                 let nudge = r as i32 - l as i32;
                 let tile = feed_tile(ui, true);
                 let acts = &mut app.actions;
@@ -1003,7 +1003,7 @@ fn artist(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
     card_row(ui, "a-pl", "Featured on", &a.playlists, acts);
     card_row(ui, "a-sim", "Fans might also like", &a.similar, acts);
     if let Some(d) = a.description.as_deref().filter(|d| !d.trim().is_empty()) {
-        shelf_header(ui, "About", None, None, false);
+        shelf_header(ui, "", "About", None, None, false);
         let full = ui.available_width().min(820.0);
         // A lettered artist's signature can't be the hero, so it signs the About
         // section beside the prose the way a page signs itself off.
