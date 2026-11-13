@@ -1556,34 +1556,36 @@ fn settings_lyrics(app: &mut App, ui: &mut Ui) {
         // Source order: the first enabled source with lyrics for a song is shown; the
         // lyrics toolbar can pick another for that song.
         let open = fold_row(ui, "Lyrics sources", "Tried in this order. Switch one off to skip it; the toolbar under the lyrics picks a different one for a single song.");
-        let n = if open { app.lyric_prefs.order.len() } else { 0 };
         let mut swap: Option<(usize, usize)> = None;
-        for i in 0..n {
-            let (p, on) = app.lyric_prefs.order[i];
-            let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
-            let mut row = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)));
-            let mut enabled = on;
-            if toggle(&mut row, &mut enabled, p.name()).changed() {
-                app.lyric_prefs.order[i].1 = enabled;
+        fold_body(ui, fold_state(ui, "Lyrics sources").0, open, |ui| {
+            let n = app.lyric_prefs.order.len();
+            for i in 0..n {
+                let (p, on) = app.lyric_prefs.order[i];
+                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
+                let mut row = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)));
+                let mut enabled = on;
+                if toggle(&mut row, &mut enabled, p.name()).changed() {
+                    app.lyric_prefs.order[i].1 = enabled;
+                }
+                row.add_space(10.0);
+                let kind = match p.sync() {
+                    crate::lyrics::SyncKind::Syllable => "syllable",
+                    crate::lyrics::SyncKind::Word => "word",
+                    crate::lyrics::SyncKind::Line => "line",
+                    crate::lyrics::SyncKind::Unsynced => "plain",
+                };
+                row.label(egui::RichText::new(p.name()).font(theme::semibold(13.5)).color(if on { theme::text() } else { theme::text_dim() }));
+                row.label(egui::RichText::new(kind).font(theme::regular(12.0)).color(theme::text_dim()));
+                row.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.add_enabled(i + 1 < n, egui::Button::new("↓").min_size(vec2(28.0, 24.0))).on_hover_text("Lower").clicked() {
+                        swap = Some((i, i + 1));
+                    }
+                    if ui.add_enabled(i > 0, egui::Button::new("↑").min_size(vec2(28.0, 24.0))).on_hover_text("Higher").clicked() {
+                        swap = Some((i, i - 1));
+                    }
+                });
             }
-            row.add_space(10.0);
-            let kind = match p.sync() {
-                crate::lyrics::SyncKind::Syllable => "syllable",
-                crate::lyrics::SyncKind::Word => "word",
-                crate::lyrics::SyncKind::Line => "line",
-                crate::lyrics::SyncKind::Unsynced => "plain",
-            };
-            row.label(egui::RichText::new(p.name()).font(theme::semibold(13.5)).color(if on { theme::text() } else { theme::text_dim() }));
-            row.label(egui::RichText::new(kind).font(theme::regular(12.0)).color(theme::text_dim()));
-            row.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.add_enabled(i + 1 < n, egui::Button::new("↓").min_size(vec2(28.0, 24.0))).on_hover_text("Lower").clicked() {
-                    swap = Some((i, i + 1));
-                }
-                if ui.add_enabled(i > 0, egui::Button::new("↑").min_size(vec2(28.0, 24.0))).on_hover_text("Higher").clicked() {
-                    swap = Some((i, i - 1));
-                }
-            });
-        }
+        });
         if let Some((a, b)) = swap {
             app.lyric_prefs.order.swap(a, b);
         }
@@ -1664,6 +1666,38 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
         divider(ui);
         setting_row(ui, "Pulse with the music", Some("The background swells with the beat."), |ui| {
             toggle(ui, &mut app.reactive_bg, "Pulse with the music");
+        });
+        divider(ui);
+        setting_row(ui, "Size", Some("Everything in the app, larger or smaller. ⌘+ and ⌘− do the same from anywhere, and ⌘0 goes back to 100%."), |ui| {
+            // Right to left: larger, the size (a click resets it), smaller.
+            let ctx = ui.ctx().clone();
+            let z = ctx.zoom_factor();
+            let step = |ui: &mut Ui, up: bool, on: bool| -> bool {
+                let name = if up { "Larger" } else { "Smaller" };
+                let (r, resp) = ui.allocate_exact_size(vec2(32.0, 30.0), if on { Sense::click() } else { Sense::hover() });
+                let resp = widgets::named(resp, name).on_hover_text(name);
+                let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), on && resp.hovered(), 0.12);
+                ui.painter().rect_filled(r, 8.0, theme::glass(0.08 + 0.08 * h));
+                let stroke = egui::Stroke::new(1.6, theme::with_alpha(theme::text(), if on { 1.0 } else { 0.35 }));
+                ui.painter().hline((r.center().x - 5.0)..=(r.center().x + 5.0), r.center().y, stroke);
+                if up {
+                    ui.painter().vline(r.center().x, (r.center().y - 5.0)..=(r.center().y + 5.0), stroke);
+                }
+                resp.clicked()
+            };
+            ui.spacing_mut().item_spacing.x = 6.0;
+            if step(ui, true, z < *super::shell::ZOOM_RANGE.end() - 0.001) {
+                super::shell::zoom_step(&ctx, true);
+            }
+            let (r, resp) = ui.allocate_exact_size(vec2(52.0, 30.0), Sense::click());
+            let resp = widgets::named(resp, "Reset size").on_hover_text("Back to 100%").on_hover_cursor(egui::CursorIcon::PointingHand);
+            ui.painter().text(r.center(), Align2::CENTER_CENTER, format!("{:.0}%", z * 100.0), theme::semibold(13.5), theme::text());
+            if resp.clicked() {
+                ctx.set_zoom_factor(1.0);
+            }
+            if step(ui, false, z > *super::shell::ZOOM_RANGE.start() + 0.001) {
+                super::shell::zoom_step(&ctx, false);
+            }
         });
         divider(ui);
         setting_row(ui, "Font", Some("For the whole app and the lyrics. Any font installed on this PC works, e.g. one made for your language."), |ui| {
@@ -1769,10 +1803,8 @@ fn settings_connections(app: &mut App, ui: &mut Ui) {
 
 /// Settings › Keyboard shortcuts.
 fn settings_shortcuts(ui: &mut Ui) {
-    if !section_fold(ui, "Keyboard shortcuts") {
-        return;
-    }
-    settings_card(ui, |ui| {
+    let open = section_fold(ui, "Keyboard shortcuts");
+    fold_body(ui, fold_state(ui, "Keyboard shortcuts").0, open, |ui| settings_card(ui, |ui| {
         let keys: &[(&str, &[&str])] = &[
             ("Play / pause", &["Space"]),
             ("Next / previous song", &["⌘", "→ / ←"]),
@@ -1780,6 +1812,8 @@ fn settings_shortcuts(ui: &mut Ui) {
             ("Search", &["⌘", "F"]),
             ("Lyrics panel", &["⌘", "L"]),
             ("Settings", &["⌘", ","]),
+            ("Larger / smaller", &["⌘", "+ / −"]),
+            ("Actual size", &["⌘", "0"]),
             ("Mini player", &["⌥", "⌘", "M"]),
             ("Show or hide the sidebar", &["⌃", "⌘", "S"]),
             ("Lyrics in now playing", &["L"]),
@@ -1803,7 +1837,7 @@ fn settings_shortcuts(ui: &mut Ui) {
                 }
             }
         }
-    });
+    }));
 }
 
 /// Settings › Network: the proxy everything goes through, a connection test, and a
@@ -2073,8 +2107,41 @@ fn fold_state(ui: &Ui, key: &str) -> (egui::Id, bool) {
 
 /// A chevron that turns as `open` animates.
 fn chevron(ui: &Ui, at: egui::Pos2, id: egui::Id, open: bool, color: Color32) {
-    let k = theme::anim_bool(ui.ctx(), id.with("turn"), open, 0.18);
-    widgets::icon_at(ui, at, if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 16.0, color);
+    let k = theme::anim_bool(ui.ctx(), id.with("turn"), open, 0.2);
+    // Drawn, not the font's two glyphs: it turns through the quarter between them.
+    let (sin, cos) = (k * std::f32::consts::FRAC_PI_2).sin_cos();
+    let turn = |x: f32, y: f32| at + vec2(x * cos - y * sin, x * sin + y * cos);
+    let points = vec![turn(-2.0, -4.5), turn(2.5, 0.0), turn(-2.0, 4.5)];
+    ui.painter().add(egui::Shape::line(points, egui::Stroke::new(1.7, color)));
+}
+
+/// A fold's body, opening and closing over a fifth of a second rather than all at once:
+/// laid out at its full height and clipped to the part that's open, fading as it goes.
+/// The height is the one measured the frame before.
+fn fold_body(ui: &mut Ui, id: egui::Id, open: bool, body: impl FnOnce(&mut Ui)) {
+    let t = theme::anim_bool(ui.ctx(), id.with("body"), open, 0.22);
+    if t <= 0.0 {
+        return;
+    }
+    let height_id = id.with("body-h");
+    let full: f32 = ui.data(|d| d.get_temp(height_id)).unwrap_or(0.0);
+    let at = ui.cursor().min;
+    let w = ui.available_width();
+    let shown = Rect::from_min_size(at, vec2(w, if t >= 1.0 { full } else { full * t }));
+    let mut child = ui.new_child(egui::UiBuilder::new().id_salt(height_id).max_rect(Rect::from_min_size(at, vec2(w, full.max(1.0)))));
+    if t < 1.0 {
+        child.set_clip_rect(shown.intersect(ui.clip_rect()));
+        child.multiply_opacity(t);
+        super::animate(ui.ctx());
+    }
+    body(&mut child);
+    let measured = child.min_rect().height();
+    if (measured - full).abs() > 0.5 {
+        // First shown, or its content changed: the room it takes follows next frame.
+        ui.data_mut(|d| d.insert_temp(height_id, measured));
+        ui.ctx().request_repaint();
+    }
+    ui.allocate_rect(Rect::from_min_size(at, vec2(w, if t >= 1.0 { measured } else { full * t })), Sense::hover());
 }
 
 /// A section heading that folds its section away; a click toggles it. True when open.

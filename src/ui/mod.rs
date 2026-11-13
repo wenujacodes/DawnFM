@@ -1401,6 +1401,7 @@ impl eframe::App for App {
         shell::suggestions(self, &ctx);
         shell::search_results(self, &ctx);
         shell::toast(self, &ctx, now);
+        shell::zoom_badge(&ctx, now);
         // A click takes effect in the next frame's `logic`: have that frame now, not at
         // the idle pacing's next tick.
         if !self.actions.is_empty() {

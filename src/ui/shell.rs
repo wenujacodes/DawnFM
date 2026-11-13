@@ -1318,6 +1318,53 @@ pub fn queue_list(app: &mut App, ui: &mut Ui, salt: &str) {
 
 // ------------------------------------------------------------------ toast
 
+/// The app's size, as egui's zoom: ⌘+ and ⌘− step it by a tenth and ⌘0 resets it
+/// (egui's own shortcuts), and Settings › Appearance has the same steps.
+pub const ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.7..=1.6;
+
+/// One step larger (`up`) or smaller, on tenths and inside [`ZOOM_RANGE`].
+pub fn zoom_step(ctx: &egui::Context, up: bool) {
+    let z = ctx.zoom_factor() + if up { 0.1 } else { -0.1 };
+    ctx.set_zoom_factor(((z * 10.0).round() / 10.0).clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end()));
+}
+
+/// Keeps the size inside its range and, for a moment after it changes, shows it as a
+/// percentage at the window's top right.
+pub fn zoom_badge(ctx: &egui::Context, now: f64) {
+    let z = ctx.zoom_factor();
+    if !ZOOM_RANGE.contains(&z) {
+        ctx.set_zoom_factor(z.clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end()));
+    }
+    // The size last seen and when it changed; the one at launch isn't a change.
+    let id = egui::Id::unique("zoom-badge");
+    let (seen, at) = ctx.data(|d| d.get_temp::<(f32, f64)>(id)).unwrap_or((z, f64::NEG_INFINITY));
+    let at = if (seen - z).abs() > 0.001 { now } else { at };
+    ctx.data_mut(|d| d.insert_temp(id, (z, at)));
+    let age = (now - at) as f32;
+    if age >= 1.6 {
+        return;
+    }
+    let t = theme::ease_out(age / 0.15) * (1.0 - ((age - 1.3) / 0.3).clamp(0.0, 1.0));
+    let screen = ctx.content_rect();
+    egui::Area::new(egui::Id::unique("zoom-badge-area"))
+        .order(egui::Order::Tooltip)
+        .pivot(Align2::RIGHT_TOP)
+        .fixed_pos(pos2(screen.right() - 16.0, screen.top() + 14.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            ui.set_opacity(t);
+            egui::Frame::new()
+                .fill(theme::menu_fill())
+                .corner_radius(8)
+                .inner_margin(egui::Margin::symmetric(12, 7))
+                .shadow(egui::epaint::Shadow { offset: [0, 6], blur: 18, spread: 0, color: theme::shade(0.35) })
+                .show(ui, |ui| {
+                    ui.label(egui::RichText::new(format!("{:.0}%", z * 100.0)).font(theme::semibold(13.0)).color(theme::text()));
+                });
+        });
+    ctx.request_repaint();
+}
+
 pub fn toast(app: &mut App, ctx: &egui::Context, now: f64) {
     let Some((msg, shown)) = &app.toast else { return };
     if *shown < 0.0 {
