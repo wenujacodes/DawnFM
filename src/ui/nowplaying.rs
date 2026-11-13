@@ -700,7 +700,9 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
     };
     let pos = app.lyric_clock.tick(pos, playing, now);
     let t = pos - app.lyric_prefs.offset(id, lyrics.provider, lyrics.sync == Sync::Word);
-    let (roman, trans) = decorations(app.show_roman, app.show_trans, &app.lyric_prefs.target, app.lyrics_extras.as_ref(), id, lyrics);
+    // A Sinhala song as written: neither how it's said nor what it means under it.
+    let extras = !lyrics.lines.iter().any(|l| crate::translate::sinhala(&l.text));
+    let (roman, trans) = decorations(app.show_roman && extras, app.show_trans && extras, &app.lyric_prefs.target, app.lyrics_extras.as_ref(), id, lyrics);
     let key = {
         use std::hash::{Hash, Hasher};
         let mut h = std::collections::hash_map::DefaultHasher::new();

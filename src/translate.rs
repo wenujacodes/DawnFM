@@ -252,6 +252,12 @@ pub fn script_language(s: &str) -> Option<&'static str> {
     table.iter().find(|(r, _)| has(r)).map(|(_, l)| *l)
 }
 
+/// Whether a line has Sinhala letters. Sinhala lyrics are shown as written, with no
+/// romanization or translation under them.
+pub fn sinhala(s: &str) -> bool {
+    s.chars().any(|c| matches!(c as u32, 0x0D80..=0x0DFF))
+}
+
 /// Whether a line has letters outside the Latin script (kana, hangul, Cyrillic, ...).
 pub fn non_latin(s: &str) -> bool {
     s.chars().any(|c| c.is_alphabetic() && !matches!(c as u32, 0..=0x024F | 0x1E00..=0x1EFF | 0x2C60..=0x2C7F | 0xA720..=0xA7FF | 0xFF21..=0xFF5A))
