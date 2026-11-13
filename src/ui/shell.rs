@@ -152,16 +152,8 @@ fn nav_bg(ui: &Ui, look: NavLook, rect: Rect, h: f32, s: f32) -> Color32 {
     }
 }
 
-/// Sidebar width expanded and collapsed to an icon rail (points).
+/// Sidebar width (points).
 pub const SIDEBAR_W: f32 = 220.0;
-pub const RAIL_W: f32 = 76.0;
-
-/// How collapsed the sidebar is, 0 (full) to 1 (icon rail), eased over the toggle.
-pub fn sidebar_collapse(app: &App, ctx: &egui::Context) -> f32 {
-    let t = ctx.animate_bool_with_time(egui::Id::unique("sidebar-collapse"), app.sidebar_collapsed, 0.28 * theme::SPEED);
-    // Ease in-out: starts and lands gently in both directions.
-    t * t * (3.0 - 2.0 * t)
-}
 
 /// A button on the sidebar's top line, at `rect`: a rounded rectangle under the
 /// pointer, with `paint` drawing its mark at the centre in the given colour.
@@ -176,56 +168,34 @@ fn top_button(ui: &mut Ui, rect: Rect, key: &str, name: &str, paint: impl FnOnce
     resp.clicked()
 }
 
-/// The chevron pair that walks the page history, beside the sidebar button.
+/// The chevron pair that walks the page history.
 fn history_button(ui: &mut Ui, rect: Rect, glyph: char, name: &str) -> bool {
     top_button(ui, rect, name, name, |ui, at, c| icon_at(ui, at, glyph, 16.0, c))
 }
 
-/// The sidebar button's mark: a window outline with its sidebar ruled off.
-fn sidebar_mark(ui: &Ui, at: Pos2, c: Color32) {
-    let r = Rect::from_center_size(at, vec2(17.0, 13.0));
-    let stroke = egui::Stroke::new(1.5, c);
-    ui.painter().rect_stroke(r, 3.5, stroke, egui::StrokeKind::Inside);
-    ui.painter().vline(r.left() + 6.0, (r.top() + 1.0)..=(r.bottom() - 1.0), stroke);
-}
-
-/// One layout for both states, so collapsing animates: the panel narrows while icons
-/// and covers keep their column (24 pt from the left) and the labels fade and clip.
+/// The sidebar: the search box, the app's pages and the playlists.
 pub fn sidebar(app: &mut App, ui: &mut Ui) {
     const ICON_X: f32 = 24.0;
-    let t = sidebar_collapse(app, ui.ctx());
-    let collapsed = app.sidebar_collapsed;
-    // Labels fade out over the first two thirds of collapsing (and back in late).
-    let a = ((1.0 - t) * 1.5 - 0.5).clamp(0.0, 1.0);
-    // Content width when expanded: text keeps its truncation while the panel narrows.
-    let full_w = ui.available_width() + (SIDEBAR_W - RAIL_W) * t;
+    // Content width: text keeps its truncation inside it.
+    let full_w = ui.available_width();
 
-    // The sidebar button and the page history beside it, on the macOS window buttons'
-    // line and right after them (the buttons' centres are 16 points down, the last one
-    // ending some 62 in). The rail is no wider than those buttons, so there the sidebar
-    // button drops under them into the icons' column and the history fades away. A
+    // The page history buttons, on the macOS window buttons' line and right after them
+    // (the buttons' centres are 16 points down, the last one ending some 62 in). A
     // floating sidebar starts beside the window buttons, not under: it keeps the row.
     let top = ui.cursor().min;
     let screen = ui.ctx().content_rect();
     let below = pos2(top.x + ICON_X - 14.0, top.y + 3.0);
     let on_line = top.y - screen.top() >= 36.0;
-    let at = if on_line { pos2(screen.left() + 76.0, screen.top() + 3.0).lerp(below, t) } else { below };
-    let button = |i: usize| Rect::from_min_size(at + vec2([0.0, 34.0, 64.0][i], 0.0), vec2(28.0, 26.0));
-    if top_button(ui, button(0), "toggle", if collapsed { "Show sidebar" } else { "Hide sidebar" }, sidebar_mark) {
-        app.sidebar_collapsed = !collapsed;
+    let at = if on_line { pos2(screen.left() + 76.0, screen.top() + 3.0) } else { below };
+    let button = |i: usize| Rect::from_min_size(at + vec2([0.0, 30.0][i], 0.0), vec2(28.0, 26.0));
+    if history_button(ui, button(0), icon::CHEVRON_LEFT, "Back") {
+        app.nav_back();
     }
-    if a > 0.0 {
-        let mut hui = ui.new_child(egui::UiBuilder::new().max_rect(ui.max_rect()));
-        hui.set_opacity(a);
-        if history_button(&mut hui, button(1), icon::CHEVRON_LEFT, "Back") {
-            app.nav_back();
-        }
-        if history_button(&mut hui, button(2), icon::CHEVRON_RIGHT, "Forward") {
-            app.nav_forward();
-        }
+    if history_button(ui, button(1), icon::CHEVRON_RIGHT, "Forward") {
+        app.nav_forward();
     }
     // The row's own room: all of it under the window buttons, none beside them.
-    ui.add_space(if on_line { 4.0 + 42.0 * t } else { 46.0 });
+    ui.add_space(if on_line { 4.0 } else { 46.0 });
 
     let mut go_to: Option<Page> = None;
     let look = NavLook::of(app);
@@ -233,19 +203,14 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     // `paint` puts its icon at the given point in the given colour.
     let row = |ui: &mut Ui, paint: &dyn Fn(&Ui, Pos2, Color32), label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
-        let mut resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
-        if collapsed {
-            resp = resp.on_hover_text(label);
-        }
+        let resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
         let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
         let s = theme::anim_bool(ui.ctx(), resp.id.with("s"), selected, 0.2);
         let icon_fg = nav_bg(ui, look, rect, h, s);
         paint(ui, pos2(rect.left() + ICON_X, rect.center().y), icon_fg);
-        if a > 0.0 {
-            let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
-            let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
-            ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
-        }
+        let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
+        let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
+        ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, fg);
         if resp.clicked() {
             *go_to = Some(page);
         }
@@ -254,40 +219,32 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         row(ui, &|ui: &Ui, at: Pos2, c: Color32| icon_at(ui, at, glyph, 15.0, c), label, page, selected, go_to);
     };
     // A section's heading; a click folds the section away (remembered across launches).
-    // On the collapsed rail headings fold away and every section shows.
     let section = |ui: &mut Ui, title: &str| -> bool {
         let key = egui::Id::unique(("sidebar-section", title));
         let mut open = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(key, || true));
-        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0 * (1.0 - t)), Sense::click());
-        if a > 0.0 {
-            let resp = named(resp, title).on_hover_cursor(egui::CursorIcon::PointingHand);
-            let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
-            let c = theme::with_alpha(theme::lerp_color(theme::text_faint(), theme::text_dim(), h), a);
-            ui.painter().text(pos2(r.left() + 8.0, r.center().y), Align2::LEFT_CENTER, title, theme::semibold(11.0), c);
-            let k = theme::anim_bool(ui.ctx(), resp.id.with("open"), open, 0.15);
-            icon_at(ui, pos2(r.right() - 12.0, r.center().y), if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 12.0, c);
-            if resp.clicked() && !collapsed {
-                open = !open;
-                ui.data_mut(|d| d.insert_persisted(key, open));
-            }
+        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+        let resp = named(resp, title).on_hover_cursor(egui::CursorIcon::PointingHand);
+        let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
+        let c = theme::lerp_color(theme::text_faint(), theme::text_dim(), h);
+        ui.painter().text(pos2(r.left() + 8.0, r.center().y), Align2::LEFT_CENTER, title, theme::semibold(11.0), c);
+        let k = theme::anim_bool(ui.ctx(), resp.id.with("open"), open, 0.15);
+        icon_at(ui, pos2(r.right() - 12.0, r.center().y), if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 12.0, c);
+        if resp.clicked() {
+            open = !open;
+            ui.data_mut(|d| d.insert_persisted(key, open));
         }
-        open || collapsed
+        open
     };
     let nav = |ui: &mut Ui, glyph: &'static [u8], size: f32, label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
         let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
-        let mut resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
-        if collapsed {
-            resp = resp.on_hover_text(label);
-        }
+        let resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
         let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
         let s = theme::anim_bool(ui.ctx(), resp.id.with("s"), selected, 0.2);
         let icon_fg = nav_bg(ui, look, rect, h, s);
         glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), size, glyph, icon_fg);
-        if a > 0.0 {
-            let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
-            let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
-            ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
-        }
+        let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
+        let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
+        ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, fg);
         if resp.clicked() {
             *go_to = Some(page);
         }
@@ -296,13 +253,8 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     // A size down from the desktop app's, for the shorter rows.
     const APPLE: f32 = glyphs::APPLE_GLYPH - 3.0;
     const LUCIDE: f32 = glyphs::LUCIDE_GLYPH - 2.0;
-    // The search box, or on the collapsed rail its icon, which opens the sidebar to it.
-    if collapsed {
-        nav(ui, glyphs::SEARCH, APPLE, "Search", Page::Search(String::new()), false, &mut go_to);
-    } else {
-        search_field(app, ui, ui.available_width());
-        ui.add_space(6.0);
-    }
+    search_field(app, ui, ui.available_width());
+    ui.add_space(6.0);
     if section(ui, "YouTube Music") {
         nav(ui, glyphs::HOME, APPLE, "Home", Page::Home, p == Page::Home, &mut go_to);
         nav(ui, glyphs::EXPLORE, APPLE, "New", Page::New, p == Page::New, &mut go_to);
@@ -340,25 +292,17 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     let list_h = (ui.available_height() - bottom_h).max(0.0);
     ui.allocate_ui(vec2(ui.available_width(), list_h), |ui| {
         if !app.logged_in {
-            // Too wide to squeeze: cross-fade the message and the rail's icon.
-            if t < 0.5 {
-                ui.multiply_opacity(1.0 - 2.0 * t);
-                ui.label(egui::RichText::new("Sign in to see your playlists").color(theme::text_dim()));
-                ui.add_space(8.0);
-                if widgets::pill(ui, "Sign in", None, false).clicked() {
-                    app.start_sign_in(ui.ctx());
-                }
-            } else {
-                ui.multiply_opacity(2.0 * t - 1.0);
-                nav(ui, glyphs::PERSON_CIRCLE, LUCIDE, "Sign in", Page::Settings, false, &mut go_to);
+            ui.label(egui::RichText::new("Sign in to see your playlists").color(theme::text_dim()));
+            ui.add_space(8.0);
+            if widgets::pill(ui, "Sign in", None, false).clicked() {
+                app.start_sign_in(ui.ctx());
             }
             return;
         }
         if !playlists_open {
             return;
         }
-        let bars = if t > 0.0 { egui::scroll_area::ScrollBarVisibility::AlwaysHidden } else { egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded };
-        egui::ScrollArea::vertical().id_salt("sidebar-pl").auto_shrink(false).scroll_bar_visibility(bars).show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("sidebar-pl").auto_shrink(false).show(ui, |ui| {
             // Last launch's list until the library arrives.
             let Some(playlists) = app.library.as_ref().map(|l| &l.playlists).or(app.sidebar_cache.as_ref()) else {
                 // The spinner animates every frame: give up on a request that never answered.
@@ -367,8 +311,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                         ui.add_space(ICON_X - 8.0);
                         ui.spinner();
                     });
-                } else if t < 0.5 {
-                    ui.multiply_opacity(1.0 - 2.0 * t);
+                } else {
                     ui.label(egui::RichText::new("Couldn't load your playlists").color(theme::text_dim()));
                     ui.add_space(8.0);
                     if widgets::pill(ui, "Try again", None, false).clicked() {
@@ -399,10 +342,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                     continue;
                 }
                 let is_dragged = dragging.as_deref() == Some(id.as_str());
-                let mut resp = named(resp, &c.title).on_hover_cursor(if is_dragged { egui::CursorIcon::Grabbing } else { egui::CursorIcon::PointingHand });
-                if collapsed {
-                    resp = resp.on_hover_text(&c.title);
-                }
+                let resp = named(resp, &c.title).on_hover_cursor(if is_dragged { egui::CursorIcon::Grabbing } else { egui::CursorIcon::PointingHand });
                 if resp.drag_started() {
                     ui.data_mut(|d| d.insert_temp(drag_key, id.clone()));
                 }
@@ -419,11 +359,9 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                 ui.painter().rect_filled(rect, look.radius, theme::glass(0.05 * h + if selected { 0.08 } else { 0.0 } + lift));
                 let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(22.0));
                 paint_cover(ui, img, &c.thumbs, theme::thumb_radius(), 1.0);
-                if a > 0.0 {
-                    let w = full_w - 54.0;
-                    let fg = if selected { theme::text() } else { theme::lerp_color(theme::text_dim(), theme::text(), h) };
-                    text_at(ui, pos2(rect.left() + 44.0, rect.center().y - 8.5), &c.title, theme::regular(13.0), theme::with_alpha(fg, a), w);
-                }
+                let w = full_w - 54.0;
+                let fg = if selected { theme::text() } else { theme::lerp_color(theme::text_dim(), theme::text(), h) };
+                text_at(ui, pos2(rect.left() + 44.0, rect.center().y - 8.5), &c.title, theme::regular(13.0), fg, w);
                 egui::Popup::context_menu(&resp).show(|ui| {
                     ui.set_min_width(190.0);
                     if ui.button("Hide from sidebar").clicked() {
@@ -457,22 +395,17 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         nav(ui, glyphs::SETTINGS, LUCIDE, "Settings", Page::Settings, p == Page::Settings, &mut go_to);
         if transferring {
-            super::transfer::sidebar_card(app, ui, collapsed, a, ICON_X);
+            super::transfer::sidebar_card(app, ui, ICON_X);
         }
         if let Some(v) = &ready {
             ui.add_space(6.0);
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 52.0), Sense::click());
-            let mut resp = named(resp, "Restart to update").on_hover_cursor(egui::CursorIcon::PointingHand);
-            if collapsed {
-                resp = resp.on_hover_text(format!("Restart to update to Dawn FM {v}"));
-            }
+            let resp = named(resp, "Restart to update").on_hover_cursor(egui::CursorIcon::PointingHand);
             let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
             ui.painter().rect_filled(rect, 12.0, theme::with_alpha(look.accent, 0.22 + 0.12 * h));
             glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), LUCIDE, glyphs::SPARKLES, theme::text());
-            if a > 0.0 {
-                ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 17.0), Align2::LEFT_CENTER, "Restart to update", theme::semibold(13.5), theme::with_alpha(theme::text(), a));
-                ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 35.0), Align2::LEFT_CENTER, format!("Dawn FM {v}"), theme::regular(12.0), theme::with_alpha(theme::text(), 0.75 * a));
-            }
+            ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 17.0), Align2::LEFT_CENTER, "Restart to update", theme::semibold(13.5), theme::text());
+            ui.painter().text(pos2(rect.left() + 46.0, rect.top() + 35.0), Align2::LEFT_CENTER, format!("Dawn FM {v}"), theme::regular(12.0), theme::with_alpha(theme::text(), 0.75));
             restart = resp.clicked();
         }
     });

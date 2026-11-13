@@ -1438,7 +1438,7 @@ pub fn sidebar_visible(app: &App, now: f64) -> bool {
 const DONE_LINGER: f64 = 6.0;
 
 /// The card above Settings in the sidebar while a transfer runs, waits or just finished.
-pub fn sidebar_card(app: &mut App, ui: &mut Ui, collapsed: bool, fade: f32, icon_x: f32) {
+pub fn sidebar_card(app: &mut App, ui: &mut Ui, icon_x: f32) {
     let (frac, status) = {
         let guard = app.transfer.job.lock_unpoisoned();
         let Some(job) = guard.as_ref() else { return };
@@ -1462,9 +1462,7 @@ pub fn sidebar_card(app: &mut App, ui: &mut Ui, collapsed: bool, fade: f32, icon
     ui.add_space(6.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 58.0), Sense::click());
     let mut resp = named(resp, "Spotify transfer").on_hover_cursor(egui::CursorIcon::PointingHand);
-    if collapsed {
-        resp = resp.on_hover_text(format!("Spotify transfer: {status}"));
-    } else if status == "Review" {
+    if status == "Review" {
         resp = resp.on_hover_text("Some songs need a look before they're added");
     }
     let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
@@ -1472,11 +1470,8 @@ pub fn sidebar_card(app: &mut App, ui: &mut Ui, collapsed: bool, fade: f32, icon
     ui.painter().rect_stroke(rect, 12.0, egui::Stroke::new(1.0, theme::glass(0.10)), egui::StrokeKind::Inside);
     let b = Rect::from_center_size(pos2(rect.left() + icon_x, rect.top() + 22.0), vec2(20.0, 20.0));
     badge(ui, b);
-    if fade > 0.0 {
-        let c = theme::with_alpha(theme::text(), fade);
-        let st = ui.painter().text(pos2(rect.right() - 12.0, rect.top() + 22.0), Align2::RIGHT_CENTER, &status, theme::regular(12.0), theme::with_alpha(if status == "Review" { accent } else { theme::text_dim() }, fade));
-        text_at(ui, pos2(rect.left() + 48.0, rect.top() + 14.0), "Spotify transfer", theme::semibold(13.0), c, st.left() - rect.left() - 56.0);
-    }
+    let st = ui.painter().text(pos2(rect.right() - 12.0, rect.top() + 22.0), Align2::RIGHT_CENTER, &status, theme::regular(12.0), if status == "Review" { accent } else { theme::text_dim() });
+    text_at(ui, pos2(rect.left() + 48.0, rect.top() + 14.0), "Spotify transfer", theme::semibold(13.0), theme::text(), st.left() - rect.left() - 56.0);
     let bar = Rect::from_min_max(pos2(rect.left() + 12.0, rect.bottom() - 14.0), pos2(rect.right() - 12.0, rect.bottom() - 10.0));
     ui.painter().rect_filled(bar, 2.0, theme::glass(0.14));
     ui.painter().rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * frac.clamp(0.0, 1.0), bar.height())), 2.0, accent);

@@ -1773,7 +1773,6 @@ fn settings_shortcuts(ui: &mut Ui) {
             ("Larger / smaller", &["⌘", "+ / −"]),
             ("Actual size", &["⌘", "0"]),
             ("Mini player", &["⌥", "⌘", "M"]),
-            ("Show or hide the sidebar", &["⌃", "⌘", "S"]),
             ("Lyrics in now playing", &["L"]),
             ("Queue", &["Q"]),
             ("Full-screen lyrics (in now playing)", &["F"]),
