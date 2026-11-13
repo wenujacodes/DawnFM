@@ -172,15 +172,42 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             widgets::preload_cover(ui.ctx(), &track.thumbs, px);
         }
         if beside_cover && art_vis < 0.999 {
-            // The song and its controls on a frosted card over the cover's bottom left.
+            // The song on a frosted card over the cover, centred under it. While it plays
+            // the card is just the title and artist: it opens to the seek line and the
+            // transport under the pointer, and goes away once the pointer rests elsewhere.
             let w = (content.width() * 0.38).clamp(300.0, 440.0);
-            let card = Rect::from_min_size(pos2(content.left() + 8.0, content.bottom() - 196.0), vec2(w + 40.0, 196.0));
+            let cw = w + 40.0;
+            // The cover is a square of the window's height from its left edge; `area` is
+            // the window less the overlay's 32 × 20 margins.
+            let cover_mid = area.left() - 32.0 + (area.height() + 40.0) / 2.0;
+            let lyrics_left = content.left() + content.width() * 0.46;
+            let left = (cover_mid - cw / 2.0).min(lyrics_left - 12.0 - cw).max(content.left() + 8.0);
+            let ctx = ui.ctx().clone();
+            let card_id = egui::Id::unique("np-card");
+            let was: Rect = ctx.data(|d| d.get_temp(card_id)).unwrap_or(Rect::NOTHING);
+            let over = ui.rect_contains_pointer(was);
+            // A seek being dragged or the ⋯ menu keeps it as it is.
+            let busy = app.seek_drag.is_some() || egui::Popup::is_any_open(&ctx);
+            let open = theme::anim_bool(&ctx, "np-card-open", over || busy || !(app.playing() || app.buffering), 0.25);
+            let idle = now - app.last_pointer_move;
+            let seen = theme::anim_bool(&ctx, "np-card-seen", idle < 2.0 || over || busy, 0.35);
+            if (open > 0.0 && open < 1.0) || (seen > 0.0 && seen < 1.0) {
+                super::animate(&ctx);
+            } else if idle < 2.0 {
+                // A frame for when the fade should start.
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64((2.0 - idle).max(0.05)));
+            }
+            let h = 70.0 + 126.0 * open;
+            let card = Rect::from_min_size(pos2(left, content.bottom() - h), vec2(cw, h));
+            ctx.data_mut(|d| d.insert_temp(card_id, card));
             let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(card));
-            cui.multiply_opacity(1.0 - art_vis);
+            // Folded, the controls are past its bottom edge: neither drawn nor clickable.
+            cui.set_clip_rect(card.intersect(ui.clip_rect()));
+            cui.multiply_opacity((1.0 - art_vis) * seen);
             cui.painter().rect_filled(card, 18.0, theme::shade(0.42));
             cui.painter().rect_filled(card, 18.0, theme::glass(0.07));
             cui.painter().rect_stroke(card, 18.0, egui::Stroke::new(1.0, theme::glass(0.12)), egui::StrokeKind::Inside);
-            sleeve(app, &mut cui, card.left() + 20.0, w, card.top() + 16.0, &track, no_lyrics, now);
+            sleeve(app, &mut cui, card.left() + 20.0, w, card.top() + 16.0, &track, no_lyrics, now, open);
         }
         if beside_cover { Rect::from_min_max(pos2(content.left() + content.width() * 0.46, content.top()), content.max) } else { content }
     } else {
@@ -291,15 +318,16 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
             ui.painter().rect_filled(art, cr, theme::shade(1.0 - cs.brightness));
         }
     }
-    sleeve(app, ui, art.left(), side, art.bottom() + 22.0, track, no_lyrics, now);
+    sleeve(app, ui, art.left(), side, art.bottom() + 22.0, track, no_lyrics, now, 1.0);
 }
 
 /// The sleeve's information under the art (title, artists, star, ⋯), the seek line
 /// with its times and quality mark, then the transport, in a column `w` wide from `x0`,
 /// starting at `info_y`. About 175 points tall. Shared by the cover column and the
-/// card over a full-bleed cover.
+/// card over a full-bleed cover. `controls`: the opacity of everything but the title
+/// and artist lines, which is all the card shows while folded.
 #[allow(clippy::too_many_arguments)]
-fn sleeve(app: &mut App, ui: &mut Ui, x0: f32, w: f32, info_y: f32, track: &crate::model::Track, no_lyrics: bool, now: f64) {
+fn sleeve(app: &mut App, ui: &mut Ui, x0: f32, w: f32, info_y: f32, track: &crate::model::Track, no_lyrics: bool, now: f64, controls: f32) {
     let hold = app.mix_hold().map(|h| (h.total, h.mix, app.mix_hold_pos(h)));
     let heard = if hold.is_some() { track.clone() } else { app.playing_track().cloned().unwrap_or_else(|| track.clone()) };
     // The star and the ⋯ menu share the information line's right end.
@@ -338,6 +366,9 @@ fn sleeve(app: &mut App, ui: &mut Ui, x0: f32, w: f32, info_y: f32, track: &crat
             }
         }
     }
+    // From here down it's the controls, which fade with the card's fold.
+    let ui = &mut ui.new_child(egui::UiBuilder::new().id_salt("np-controls").max_rect(ui.max_rect()));
+    ui.multiply_opacity(controls);
     // The star: a 30 px disc that washes under the pointer and fills in the accent
     // once liked. The ⋯ menu sits at the line's end, as on music.youtube.com.
     let liked = app.liked.contains(&heard.id);
