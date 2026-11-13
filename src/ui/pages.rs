@@ -20,9 +20,9 @@ const CARD: f32 = 180.0;
 fn feed_columns(width: f32, square: bool) -> usize {
     let viewport = width + 260.0;
     match square {
-        true if viewport < 1260.0 => 4,
-        true if viewport < 1580.0 => 5,
-        true => 6,
+        true if viewport < 1260.0 => 5,
+        true if viewport < 1580.0 => 6,
+        true => 7,
         false if viewport < 1260.0 => 2,
         false if viewport < 1580.0 => 3,
         false => 4,
