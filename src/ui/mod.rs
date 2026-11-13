@@ -535,8 +535,6 @@ pub struct App {
     window_hidden: bool,
     /// eframe's saved window geometry ("window") from the last time it was visible.
     good_window: Option<String>,
-    /// The sidebar is a narrow icon rail.
-    sidebar_collapsed: bool,
     /// The sidebar playlists' order (by id), and the ones hidden from it.
     playlist_order: Vec<String>,
     hidden_playlists: HashSet<String>,
@@ -606,6 +604,8 @@ impl App {
             let b = backend.clone();
             crate::transfer::Transfer::new(backend.data_dir(), Arc::new(move || b.wake()))
         };
+        // Not a field: the built-in look reads its colour from the presets.
+        crate::preset::set_colour(get("colour").as_deref().unwrap_or_default());
         let mut app = Self {
             backend,
             audio,
@@ -686,11 +686,6 @@ impl App {
             exiting: false,
             window_hidden: false,
             good_window: get("window"),
-            sidebar_collapsed: {
-                // Not a field: the built-in look reads its colour from the presets.
-                crate::preset::set_colour(get("colour").as_deref().unwrap_or_default());
-                get("sidebar_collapsed").is_some_and(|v| v == "1")
-            },
             playlist_order: get("playlist_order").map(|v| v.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect()).unwrap_or_default(),
             hidden_playlists: get("hidden_playlists").map(|v| v.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect()).unwrap_or_default(),
             coll_search: None,
@@ -878,7 +873,6 @@ impl App {
     fn open_search(&mut self, q: String) {
         let q = q.trim().to_owned();
         self.np_open = false;
-        self.sidebar_collapsed = false;
         self.search_text = q.clone();
         self.suggestions = Default::default();
         self.suggest_sel = None;
@@ -1301,7 +1295,7 @@ impl eframe::App for App {
             titlebar::drag_area(ui, egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), titlebar::HEIGHT)), "main");
             // And the sidebar under it, down the window: its empty parts move the window
             // too (a double-click there does nothing).
-            let side_w = shell::SIDEBAR_W - (shell::SIDEBAR_W - shell::RAIL_W) * shell::sidebar_collapse(self, &ctx);
+            let side_w = shell::SIDEBAR_W;
             let side = egui::Rect::from_min_max(egui::pos2(screen.left(), screen.top() + titlebar::HEIGHT), egui::pos2(screen.left() + side_w, screen.bottom()));
             titlebar::drag_strip(ui, side, "sidebar");
         }
@@ -1333,7 +1327,7 @@ impl eframe::App for App {
             // The sidebar first, so it runs the window's full height: the player floats
             // over the main section only, and the page content scrolls under it.
             let side = egui::Panel::left("nav").resizable(false)
-                .exact_size(shell::SIDEBAR_W - (shell::SIDEBAR_W - shell::RAIL_W) * shell::sidebar_collapse(self, &ctx))
+                .exact_size(shell::SIDEBAR_W)
                 .frame(side_frame)
                 .show_separator_line(false)
                 .show(ui, |ui| shell::sidebar(self, ui));
@@ -1501,7 +1495,6 @@ impl eframe::App for App {
         }
         storage.set_string("close_to_tray", b(self.close_to_tray));
         storage.set_string("notify_songs", b(self.notify_songs));
-        storage.set_string("sidebar_collapsed", b(self.sidebar_collapsed));
         storage.set_string("lyrics_drawer", b(self.lyrics_drawer));
         // The sidebar's playlist order, completed with any playlist that appeared since
         // it was last changed (so a drag can place them all).

@@ -33,10 +33,8 @@ pub const VOLUME: [&[u8]; 4] = [
 pub const HOME: &[u8] = include_bytes!("../../assets/icon/glyphs/home.png");
 pub const EXPLORE: &[u8] = include_bytes!("../../assets/icon/glyphs/explore.png");
 pub const LIBRARY: &[u8] = include_bytes!("../../assets/icon/glyphs/library.png");
-pub const SEARCH: &[u8] = include_bytes!("../../assets/icon/glyphs/search.png");
 pub const DOWNLOAD: &[u8] = include_bytes!("../../assets/icon/glyphs/download.png");
 pub const SETTINGS: &[u8] = include_bytes!("../../assets/icon/glyphs/settings.png");
-pub const PERSON_CIRCLE: &[u8] = include_bytes!("../../assets/icon/glyphs/person_circle.png");
 pub const SPARKLES: &[u8] = include_bytes!("../../assets/icon/glyphs/sparkles.png");
 
 /// The size the desktop app draws an Apple silhouette at (`DesktopAppleGlyph`).

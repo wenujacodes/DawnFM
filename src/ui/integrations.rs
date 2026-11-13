@@ -127,7 +127,6 @@ impl App {
                     }
                 }
                 Cmd::Mini => self.actions.push(Action::Mini(!self.mini.target())),
-                Cmd::Sidebar => self.sidebar_collapsed = !self.sidebar_collapsed,
             }
         }
     }

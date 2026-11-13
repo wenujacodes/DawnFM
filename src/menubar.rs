@@ -21,7 +21,6 @@ pub enum Cmd {
     Lyrics,
     UpNext,
     Mini,
-    Sidebar,
 }
 
 static PENDING: Mutex<Vec<Cmd>> = Mutex::new(Vec::new());
@@ -40,7 +39,6 @@ const ITEMS: &[(&str, Cmd)] = &[
     ("mb-lyrics", Cmd::Lyrics),
     ("mb-queue", Cmd::UpNext),
     ("mb-mini", Cmd::Mini),
-    ("mb-sidebar", Cmd::Sidebar),
 ];
 
 /// Clicks since the last call.
@@ -101,7 +99,6 @@ pub fn install(wake: impl Fn() + Send + Sync + Clone + 'static) {
         view.append_items(&[
             &item("mb-lyrics", "Lyrics", cmd, Some(Code::KeyL)),
             &item("mb-queue", "Up Next", cmd, None),
-            &item("mb-sidebar", "Show or Hide Sidebar", cmd | Modifiers::CONTROL, Some(Code::KeyS)),
             &sep(),
             &item("mb-mini", "Mini Player", cmd | Modifiers::ALT, Some(Code::KeyM)),
             &PredefinedMenuItem::fullscreen(None),
