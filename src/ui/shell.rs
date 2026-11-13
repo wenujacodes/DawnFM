@@ -870,7 +870,9 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     let narrow = cap.width() < 550.0;
     let pad = 16.0;
     let run_w = if narrow { 112.0 } else { 184.0 };
-    let right_w = 132.0;
+    // Docked with room to spare, the volume slider is always out, after its icon.
+    let vol_out = docked(app) && !narrow;
+    let right_w = if vol_out { 224.0 } else { 132.0 };
     let right_l = cap.right() - pad - right_w;
     // Docked: the song on the left, the controls in the middle, the rest on the right.
     // Floating: controls, then the song, then the rest.
@@ -1097,19 +1099,23 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         ui.painter().galley(pos2(text_r - g.size().x, cy + 2.0), g, col);
     }
 
-    // Right: favourite, lyrics, up next, volume. Hovering the volume slides a slider
-    // over the other three, as in the reference.
+    // Right: favourite, lyrics, up next, volume. Without room for the slider beside
+    // them, hovering the volume slides it over the other three, as in the reference.
     let vol = app.audio.volume();
     let rslot = |i: usize| right_l + 21.0 + i as f32 * 33.0;
     let vol_r = Rect::from_center_size(pos2(rslot(3), cy), Vec2::splat(28.0));
-    let slider = Rect::from_min_size(pos2(cap.right() - pad - 33.0 - 96.0, cy - 10.0), vec2(96.0, 20.0));
+    let slider = if vol_out {
+        Rect::from_min_size(pos2(vol_r.right() + 4.0, cy - 10.0), vec2(84.0, 20.0))
+    } else {
+        Rect::from_min_size(pos2(cap.right() - pad - 33.0 - 96.0, cy - 10.0), vec2(96.0, 20.0))
+    };
     let open_id = ui.scope_id().with("bar-vol");
     let was = ui.data(|d| d.get_temp::<bool>(open_id).unwrap_or(false));
     // Pointer position, not `rect_contains_pointer`: the window's own title-bar layers
     // sit above this bar, so egui would report the pointer as being over them.
     let hover = |r: Rect| ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| r.contains(p));
     let band = Rect::from_min_max(pos2(slider.left() - 3.0, cy - 14.0), pos2(vol_r.right(), cy + 14.0));
-    let open = hover(vol_r) || (was && (hover(band) || ui.input(|i| i.pointer.any_down())));
+    let open = !vol_out && (hover(vol_r) || (was && (hover(band) || ui.input(|i| i.pointer.any_down()))));
     ui.data_mut(|d| d.insert_temp(open_id, open));
     let reveal = theme::anim_bool(&ctx, "bar-vol-reveal", open, 0.15);
     let rbtn = |ui: &mut Ui, i: usize, key: &str, name: &str| -> egui::Response {
@@ -1117,6 +1123,9 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         let resp = ui.interact(r, ui.scope_id().with(("bar-r", key)), Sense::click());
         named(resp, name).on_hover_text(name).on_hover_cursor(egui::CursorIcon::PointingHand)
     };
+    if vol_out || reveal >= 0.5 {
+        volume_slider(app, ui, slider, "bar");
+    }
     if reveal < 0.5 {
         // What's heard, like Now playing's menu: a song version standing in for the video.
         let heard = if held { track.clone() } else { app.playing_track().cloned().or_else(|| track.clone()) };
@@ -1160,8 +1169,6 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
                 }
             }
         }
-    } else {
-        volume_slider(app, ui, slider, "bar");
     }
     let r = rbtn(ui, 3, "vol", "Mute");
     let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.15);
