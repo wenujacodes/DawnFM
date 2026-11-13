@@ -936,7 +936,7 @@ fn artist(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
     } else {
         ui.painter().rect_filled(hero, 14.0, theme::with_alpha(accent, 0.25));
     }
-    super::shell::vgradient(ui.painter(), Rect::from_min_max(pos2(hero.left(), hero.center().y - 40.0), hero.max), Color32::TRANSPARENT, theme::shade(0.85));
+    ui.painter().rect_filled(Rect::from_min_max(pos2(hero.left(), hero.center().y - 40.0), hero.max), 0.0, theme::shade(0.85));
     let base = hero.left_bottom() + vec2(28.0, -30.0);
     // Apple letters some artists a wordmark image instead of setting their name in type.
     // Until it downloads (or when there's none) the typed name stands in.

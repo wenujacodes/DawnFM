@@ -102,13 +102,10 @@ pub fn background(app: &mut App, ui: &mut Ui, screen: Rect, now: f64, only: Opti
     } else if mode == BgMode::Solid {
         // Plain colour: nothing over it.
     } else {
-        vgradient(&painter, screen, theme::with_alpha(app.accent_color(), 0.18 * dim / 0.5), look.solid());
+        painter.rect_filled(screen, 0.0, look.solid());
     }
     if light {
         painter.rect_filled(screen, 0.0, Color32::from_white_alpha(212));
-    } else if mode != BgMode::Solid {
-        // Keep text readable: darken toward the bottom and under the sidebar.
-        vgradient(&painter, screen, theme::shade(0.06), theme::shade(0.35));
     }
 }
 
