@@ -433,9 +433,18 @@ pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
     let (rect, field) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
     let field = field.on_hover_cursor(egui::CursorIcon::Text);
     let focus = theme::anim_bool(ui.ctx(), "search-focus", app.search_focused, 0.2);
-    ui.painter().rect_filled(rect, 8.0, theme::glass(0.09 + 0.05 * focus));
-    if focus > 0.0 {
-        ui.painter().rect_stroke(rect, 8.0, egui::Stroke::new(1.0, theme::glass(0.25 * focus)), egui::StrokeKind::Inside);
+    // Light mode: keep the fill constant (no darkening on focus), show a solid black
+    // border instead.  Dark mode keeps the original glass behaviour.
+    if theme::light() {
+        ui.painter().rect_filled(rect, 8.0, theme::glass(0.09));
+        if focus > 0.0 {
+            ui.painter().rect_stroke(rect, 8.0, egui::Stroke::new(1.2, Color32::from_black_alpha((200.0 * focus) as u8)), egui::StrokeKind::Inside);
+        }
+    } else {
+        ui.painter().rect_filled(rect, 8.0, theme::glass(0.09 + 0.05 * focus));
+        if focus > 0.0 {
+            ui.painter().rect_stroke(rect, 8.0, egui::Stroke::new(1.0, theme::glass(0.25 * focus)), egui::StrokeKind::Inside);
+        }
     }
     icon_at(ui, pos2(rect.left() + 17.0, rect.center().y), icon::SEARCH, 15.0, theme::text_dim());
     let clearable = !app.search_text.is_empty();
@@ -547,10 +556,11 @@ pub fn suggestions(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.set_opacity(t);
             egui::Frame::new()
-                .fill(theme::menu_fill())
-                .corner_radius(14)
-                .inner_margin(6)
-                .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: theme::shade(0.5) })
+                .fill(if theme::light() { theme::menu_fill() } else { Color32::from_rgba_premultiplied(50, 48, 52, 230) })
+                .corner_radius(if theme::light() { 14 } else { 8 })
+                .inner_margin(if theme::light() { 6 } else { 4 })
+                .stroke(if theme::light() { egui::Stroke::NONE } else { egui::Stroke::new(0.5, Color32::from_white_alpha(40)) })
+                .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: theme::shade(if theme::light() { 0.16 } else { 0.5 }) })
                 .show(ui, |ui| {
                     ui.set_width(rect.width() - 12.0);
                     if !ui.input(|i| i.pointer.any_down() || i.pointer.any_released()) {
@@ -649,10 +659,11 @@ pub fn search_results(app: &mut App, ctx: &egui::Context) {
     let area = egui::Area::new(egui::Id::unique("search-results")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
         ui.set_opacity(t);
         egui::Frame::new()
-            .fill(theme::menu_fill())
-            .corner_radius(14)
-            .inner_margin(8)
-            .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: theme::shade(0.5) })
+            .fill(if theme::light() { theme::menu_fill() } else { Color32::from_rgba_premultiplied(50, 48, 52, 230) })
+            .corner_radius(if theme::light() { 14 } else { 8 })
+            .inner_margin(if theme::light() { 8 } else { 6 })
+            .stroke(if theme::light() { egui::Stroke::NONE } else { egui::Stroke::new(0.5, Color32::from_white_alpha(40)) })
+            .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: theme::shade(if theme::light() { 0.16 } else { 0.5 }) })
             .show(ui, |ui| {
                 ui.set_width(width - 16.0);
                 let Some(r) = app.search.as_ref().filter(|r| r.query == q) else {
