@@ -442,10 +442,6 @@ pub struct App {
     /// freezes the motion instead of jumping when resumed.
     bg_time: f64,
     last_frame: f64,
-    /// Last time the pointer moved, for auto-hiding the player bar.
-    last_pointer_move: f64,
-    /// Cached pointer position from the previous frame.
-    prev_pointer_pos: Option<egui::Pos2>,
     search_rect: Option<egui::Rect>,
     search_focused: bool,
     /// Give the search box its focus back (removing a past search takes it away).
@@ -755,8 +751,6 @@ impl App {
             segment_skipped: f64::NEG_INFINITY,
             bg_time: 0.0,
             last_frame: 0.0,
-            last_pointer_move: 0.0,
-            prev_pointer_pos: None,
             search_rect: None,
             search_focused: false,
             search_refocus: false,
@@ -1126,22 +1120,6 @@ impl App {
         if shell::docked(self) { shell::DOCKED_H } else { 86.0 }
     }
 
-    /// Opacity for the player bar: fully visible when the mouse is moving,
-    /// fades out after 2 seconds of idle. Smoothly animated over 0.35s.
-    fn bar_visible(&self, ctx: &egui::Context, now: f64) -> f32 {
-        let idle = now - self.last_pointer_move;
-        let show = idle < 2.0;
-        let alpha = theme::anim_bool(ctx, "player-bar-autohide", show, 0.35);
-        // Keep repainting while the bar is fading or about to fade.
-        if alpha > 0.001 && alpha < 0.999 {
-            ctx.request_repaint();
-        } else if show {
-            // Mouse active: schedule a repaint for when the fade should start.
-            ctx.request_repaint_after(Duration::from_secs_f64((2.0 - idle).max(0.05)));
-        }
-        alpha
-    }
-
     fn toast(&mut self, msg: impl Into<String>) {
         self.toast = Some((msg.into(), -1.0));
     }
@@ -1274,18 +1252,6 @@ impl eframe::App for App {
         let now = ctx.input(|i| i.time);
         let screen = ctx.content_rect();
 
-        // Track pointer movement for auto-hiding the player bar.
-        let pointer_pos = ctx.input(|i| i.pointer.hover_pos());
-        let moved = match (pointer_pos, self.prev_pointer_pos) {
-            (Some(a), Some(b)) => (a - b).length() > 0.5,
-            (Some(_), None) => true,
-            _ => false,
-        };
-        if moved || ctx.input(|i| i.pointer.any_pressed() || i.pointer.any_released()) {
-            self.last_pointer_move = now;
-        }
-        self.prev_pointer_pos = pointer_pos;
-
         self.sync_look();
         let look = self.look();
         // Now playing is dark; once it's most of the way up, so is the player bar under it.
@@ -1340,15 +1306,11 @@ impl eframe::App for App {
         }
         if !self.fullscreen && covered {
             // Now playing hides the pages: the player bar keeps its full-width place.
-            let bar_visible = self.bar_visible(&ctx, now);
             egui::Panel::bottom("player").resizable(false)
                 .exact_size(self.bar_height())
                 .frame(egui::Frame::new())
                 .show_separator_line(false)
-                .show(ui, |ui| {
-                    ui.set_opacity(bar_visible);
-                    shell::player_bar(self, ui, now, false);
-                });
+                .show(ui, |ui| shell::player_bar(self, ui, now, false));
         }
         if !self.fullscreen && !covered {
             use crate::preset::SidebarStyle;
@@ -1408,14 +1370,12 @@ impl eframe::App for App {
                 });
             // The player: a frosted strip over the bottom of the main section, above the
             // pages, so their last rows fade under it instead of stopping at a seam.
-            let bar_visible = self.bar_visible(&ctx, now);
             let strip = egui::Rect::from_min_max(egui::pos2(section.left(), screen.bottom() - self.bar_height()), egui::pos2(main_right, screen.bottom()));
             egui::Area::new(egui::Id::unique("player-bar"))
                 .fixed_pos(strip.min)
                 .order(egui::Order::Middle)
                 .show(&ctx, |ui| {
                     ui.scope_builder(egui::UiBuilder::new().max_rect(strip).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
-                        ui.set_opacity(bar_visible);
                         shell::player_bar(self, ui, now, true);
                     });
                 });
