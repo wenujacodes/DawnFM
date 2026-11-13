@@ -1187,18 +1187,19 @@ fn settings(app: &mut App, ui: &mut Ui) {
 
 fn settings_body(app: &mut App, ui: &mut Ui) {
     page_title(ui, "Settings");
-    settings_updates(app, ui);
     settings_account(app, ui);
-    settings_playback(app, ui);
-    settings_downloads(ui);
-    settings_lyrics(app, ui);
     settings_appearance(app, ui);
+    settings_playback(app, ui);
+    settings_audio(app, ui);
+    settings_lyrics(app, ui);
+    settings_downloads(ui);
     settings_window(app, ui);
     settings_connections(app, ui);
+    super::transfer::settings_section(app, ui);
     section_label(ui, "Network", None);
     settings_card(ui, |ui| network(app, ui));
-    super::transfer::settings_section(app, ui);
     settings_shortcuts(ui);
+    settings_updates(app, ui);
 }
 
 /// Settings › Account: signing in and out, and which channel to use.
@@ -1341,24 +1342,18 @@ fn settings_playback(app: &mut App, ui: &mut Ui) {
             toggle(ui, &mut app.autoplay, "Autoplay");
         });
         divider(ui);
-        setting_row(ui, "Volume normalization", Some("Turn loud songs down to the same level, like YouTube Music does."), |ui| {
-            if toggle(ui, &mut app.normalize, "Volume normalization").changed() {
-                app.audio.set_normalize(app.normalize);
-            }
-        });
-        divider(ui);
-        setting_row(ui, "Logarithmic volume", Some("Space the volume slider out the way ears hear loudness, so quiet levels aren't squeezed into its first few pixels."), |ui| {
-            if toggle(ui, &mut app.log_volume, "Logarithmic volume").changed() {
-                app.audio.set_log_volume(app.log_volume);
-            }
+        setting_row(ui, "Output device", Some("Where the music plays. A picked device that isn't connected leaves it to the Mac's default until it's back."), |ui| {
+            output_device_picker(app, ui);
         });
         divider(ui);
         setting_row(ui, "Play songs, not music videos", Some("An official music video plays as its song, the album recording, when YouTube Music has one: no intros, skits or video-only edits. Lists still show what they hold."), |ui| {
             toggle(ui, &mut app.play_songs, "Play songs, not music videos");
         });
         divider(ui);
-        setting_row(ui, "Output device", Some("Where the music plays. A picked device that isn't connected leaves it to the Mac's default until it's back."), |ui| {
-            output_device_picker(app, ui);
+        setting_row(ui, "Skip non-music parts", Some("Jump over talking, skits and sponsor breaks in music videos, as marked by the SponsorBlock community. Album songs don't have any."), |ui| {
+            if toggle(ui, &mut app.sponsorblock, "Skip non-music parts").changed() {
+                app.request_segments();
+            }
         });
         divider(ui);
         setting_row(ui, "Automix", Some("Slide from one song into the next the way a DJ would: both hold their level for a moment, then swap in one smooth move, instead of a straight fade. The mix picks its own length, in phrases of 8 or 16 bars (16 on long songs), following the beat it hears."), |ui| {
@@ -1382,10 +1377,22 @@ fn settings_playback(app: &mut App, ui: &mut Ui) {
                 });
             }
         }
+    });
+}
+
+/// Settings › Audio quality: loudness and where the audio comes from.
+fn settings_audio(app: &mut App, ui: &mut Ui) {
+    section_label(ui, "Audio quality", None);
+    settings_card(ui, |ui| {
+        setting_row(ui, "Volume normalization", Some("Turn loud songs down to the same level, like YouTube Music does."), |ui| {
+            if toggle(ui, &mut app.normalize, "Volume normalization").changed() {
+                app.audio.set_normalize(app.normalize);
+            }
+        });
         divider(ui);
-        setting_row(ui, "Skip non-music parts", Some("Jump over talking, skits and sponsor breaks in music videos, as marked by the SponsorBlock community. Album songs don't have any."), |ui| {
-            if toggle(ui, &mut app.sponsorblock, "Skip non-music parts").changed() {
-                app.request_segments();
+        setting_row(ui, "Logarithmic volume", Some("Space the volume slider out the way ears hear loudness, so quiet levels aren't squeezed into its first few pixels."), |ui| {
+            if toggle(ui, &mut app.log_volume, "Logarithmic volume").changed() {
+                app.audio.set_log_volume(app.log_volume);
             }
         });
         divider(ui);
