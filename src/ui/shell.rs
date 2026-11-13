@@ -927,7 +927,8 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     } else {
         // The glyphs cross-fade rather than swap: the site keeps its pause mark up
         // through a buffer, and a hard cut between the two weights flickers.
-        let fg = ink(0.55 + 0.45 * h);
+        // The play mark is the bright one of the row, as in Music.
+        let fg = ink(0.85 + 0.15 * h);
         if morph < 1.0 {
             glyphs::draw(ui, c, 28.0, glyphs::PLAY, theme::with_alpha(fg, 1.0 - morph));
         }
@@ -952,7 +953,8 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         };
         let r = tbtn(ui, run_l + run_w - 8.0 - 14.0, "repeat", "Repeat");
         let h = theme::anim_bool(&ctx, r.id.with("h"), r.hovered(), 0.12);
-        glyphs::draw(ui, r.rect.center(), 28.0, glyph, if on { accent } else { ink(h) });
+        // On is the bright mark, not the accent: that's the equalizer's alone.
+        glyphs::draw(ui, r.rect.center(), 28.0, glyph, if on { ink(1.0) } else { ink(h) });
         if r.clicked() {
             app.queue.repeat = match app.queue.repeat {
                 Repeat::Off => Repeat::All,
@@ -991,17 +993,18 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     // Floating: a thin line under the sleeve and titles.
     let mid_x = run_l + (run_w - 8.0) / 2.0;
     let (sx0, sx1, sy) = if dock {
-        let half = (right_l - 70.0 - mid_x).min(mid_x - text_l - 150.0).clamp(60.0, 210.0);
+        let half = (right_l - 70.0 - mid_x).min(mid_x - text_l - 150.0).clamp(60.0, 150.0);
         (mid_x - half, mid_x + half, cy - 14.0)
     } else {
         (text_l, text_r, cap.bottom() - 7.0)
     };
-    let seek_hit = Rect::from_min_max(pos2(sx0, sy - 6.0), pos2(sx1, sy + 5.0));
+    let seek_hit = Rect::from_min_max(pos2(sx0, sy - if dock { 8.0 } else { 6.0 }), pos2(sx1, sy + if dock { 8.0 } else { 5.0 }));
     let sresp = ui.interact(seek_hit, ui.scope_id().with("bar-seek"), if held { Sense::hover() } else { Sense::click_and_drag() });
     let sresp = if total > 0.0 && !held { sresp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { sresp };
     sresp.widget_info(|| egui::WidgetInfo::slider(total > 0.0 && !held, pos as f64, "Seek"));
     let focus = theme::anim_bool(&ctx, "bar-seek-h", total > 0.0 && !held && (sresp.hovered() || sresp.dragged()), 0.15);
-    let thick = 2.0 + 2.0 * focus;
+    // Docked: Music's short, heavy line. Floating: a hairline under the titles.
+    let thick = if dock { 5.0 + 2.0 * focus } else { 2.0 + 2.0 * focus };
     let line_r = Rect::from_min_max(pos2(sx0, sy - thick / 2.0), pos2(sx1, sy + thick / 2.0));
     ui.painter().rect_filled(line_r, thick / 2.0, theme::glass(0.18));
     // Automix's handoff window, tinted on the part still to play.
@@ -1014,7 +1017,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
     }
     let frac = if total > 0.0 { (pos / total).clamp(0.0, 1.0) } else { 0.0 };
     if frac > 0.0 {
-        ui.painter().rect_filled(Rect::from_min_size(line_r.min, vec2(line_r.width() * frac, thick)), thick / 2.0, accent);
+        ui.painter().rect_filled(Rect::from_min_size(line_r.min, vec2(line_r.width() * frac, thick)), thick / 2.0, theme::with_alpha(theme::text(), 0.8 + 0.2 * focus));
     }
     let at = |p: Pos2| (((p.x - sx0) / (sx1 - sx0)).clamp(0.0, 1.0) * total).max(0.0);
 
