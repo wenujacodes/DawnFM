@@ -756,7 +756,7 @@ fn suggestion_text(ui: &Ui, pos: Pos2, text: &str, typed: &str, width: f32) {
 /// BitChord desktop app. Transport on the left, the sleeve with its titles and seek
 /// line in the middle, favourites / lyrics / queue / volume on the right.
 /// Height of the docked player strip.
-pub const DOCKED_H: f32 = 68.0;
+pub const DOCKED_H: f32 = 96.0;
 
 /// Whether the theme docks the player to the window's bottom edge.
 pub fn docked(app: &App) -> bool {
