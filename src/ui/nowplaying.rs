@@ -379,9 +379,11 @@ fn sleeve(app: &mut App, ui: &mut Ui, x0: f32, w: f32, info_y: f32, track: &crat
     }
     let dim = 0.85 + 0.15 * sh;
     let tint = theme::lerp_color(theme::with_alpha(Color32::WHITE, dim), app.accent_color(), pop);
-    super::glyphs::draw(ui, star.center(), 19.0, super::glyphs::STAR, tint);
+    // It swells a quarter on the way, as the mini player's does.
+    let size = 19.0 * (1.0 + 0.25 * (pop * std::f32::consts::PI).sin());
+    super::glyphs::draw(ui, star.center(), size, super::glyphs::STAR, tint);
     if pop > 0.0 {
-        super::glyphs::draw(ui, star.center(), 19.0, super::glyphs::STAR_FILLED, theme::with_alpha(app.accent_color(), pop));
+        super::glyphs::draw(ui, star.center(), size, super::glyphs::STAR_FILLED, theme::with_alpha(app.accent_color(), pop));
     }
     if sr.clicked() {
         app.actions.push(Action::Like(heard.clone(), !liked));
