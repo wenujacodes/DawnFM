@@ -962,10 +962,17 @@ fn checkbox(ui: &Ui, c: Pos2, on: bool) {
     }
 }
 
-/// Section header with optional strapline/avatar and ‹ › scroll arrows.
+/// Where `h_scroll` keeps whether the shelf `id` sits at its left or right end.
+fn shelf_edge_id(id: &str) -> egui::Id {
+    egui::Id::unique(("hscroll-edge", id))
+}
+
+/// Section header with optional strapline/avatar and ‹ › scroll arrows. `id` is the
+/// shelf's `h_scroll` id: an arrow is left out once the shelf can't go that way.
 /// Returns (scroll left, scroll right) clicks.
-pub fn shelf_header(ui: &mut Ui, title: &str, strap: Option<&str>, strap_thumb: Option<&str>, arrows: bool) -> (bool, bool) {
+pub fn shelf_header(ui: &mut Ui, id: &str, title: &str, strap: Option<&str>, strap_thumb: Option<&str>, arrows: bool) -> (bool, bool) {
     let mut res = (false, false);
+    let (at_start, at_end) = ui.ctx().data(|d| d.get_temp::<(bool, bool)>(shelf_edge_id(id))).unwrap_or((true, false));
     ui.add_space(34.0);
     ui.horizontal(|ui| {
         if let Some(url) = strap_thumb {
@@ -982,8 +989,18 @@ pub fn shelf_header(ui: &mut Ui, title: &str, strap: Option<&str>, strap_thumb: 
         });
         if arrows {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                res.1 = icon_button(ui, icon::CHEVRON_RIGHT, 18.0, &format!("Scroll {title} right"), false).clicked();
-                res.0 = icon_button(ui, icon::CHEVRON_LEFT, 18.0, &format!("Scroll {title} left"), false).clicked();
+                // A missing arrow keeps its room, so the other one stays where it is.
+                let slot = Vec2::splat(18.0 + 16.0);
+                if at_end {
+                    ui.allocate_exact_size(slot, Sense::hover());
+                } else {
+                    res.1 = icon_button(ui, icon::CHEVRON_RIGHT, 18.0, &format!("Scroll {title} right"), false).clicked();
+                }
+                if at_start {
+                    ui.allocate_exact_size(slot, Sense::hover());
+                } else {
+                    res.0 = icon_button(ui, icon::CHEVRON_LEFT, 18.0, &format!("Scroll {title} left"), false).clicked();
+                }
             });
         }
     });
@@ -1056,6 +1073,15 @@ pub fn h_scroll<R>(ui: &mut Ui, id: &str, nudge: i32, count: usize, item_width: 
         add(ui)
     }).inner);
     ui.ctx().data_mut(|d| d.insert_temp(viewport_id, out.inner_rect.width()));
+    // Which ends it is at, for the arrows in the header above (drawn before this).
+    let offset = out.state.clamped_offset().x;
+    let edges = (offset <= 0.5, offset + out.inner_rect.width() >= out.content_size.x - 0.5);
+    let edge_id = shelf_edge_id(id);
+    let seen = ui.ctx().data(|d| d.get_temp::<(bool, bool)>(edge_id));
+    ui.ctx().data_mut(|d| d.insert_temp(edge_id, edges));
+    if seen != Some(edges) {
+        ui.ctx().request_repaint();
+    }
     (out.inner, reached_end)
 }
 
