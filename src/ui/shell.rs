@@ -201,7 +201,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     let full_w = ui.available_width() + (SIDEBAR_W - RAIL_W) * t;
 
     // The sidebar button and the page history beside it, on the macOS window buttons'
-    // line and right after them (the buttons' centres are 14 points down, the last one
+    // line and right after them (the buttons' centres are 16 points down, the last one
     // ending some 62 in). The rail is no wider than those buttons, so there the sidebar
     // button drops under them into the icons' column and the history fades away. A
     // floating sidebar starts beside the window buttons, not under: it keeps the row.
@@ -209,7 +209,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     let screen = ui.ctx().content_rect();
     let below = pos2(top.x + ICON_X - 14.0, top.y + 3.0);
     let on_line = top.y - screen.top() >= 36.0;
-    let at = if on_line { pos2(screen.left() + 76.0, screen.top() + 1.0).lerp(below, t) } else { below };
+    let at = if on_line { pos2(screen.left() + 76.0, screen.top() + 3.0).lerp(below, t) } else { below };
     let button = |i: usize| Rect::from_min_size(at + vec2([0.0, 34.0, 64.0][i], 0.0), vec2(28.0, 26.0));
     if top_button(ui, button(0), "toggle", if collapsed { "Show sidebar" } else { "Hide sidebar" }, sidebar_mark) {
         app.sidebar_collapsed = !collapsed;
