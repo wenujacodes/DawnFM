@@ -270,6 +270,24 @@ fn fetch_px(px: u32) -> u32 {
     STEPS.into_iter().find(|&s| s >= px).unwrap_or(1200)
 }
 
+/// How long the window's size must hold still before it counts as resized.
+const RESIZE_SETTLE: f64 = 0.25;
+
+/// Whether the window's size changed within the last [`RESIZE_SETTLE`] seconds. Asks for
+/// a frame when that time is up, so what waited for the resize to end can catch up.
+fn resizing(ctx: &egui::Context) -> bool {
+    let id = egui::Id::unique("window-resize-watch");
+    let (size, now) = (ctx.content_rect().size(), ctx.input(|i| i.time));
+    let (last_size, changed) = ctx.data(|d| d.get_temp::<(Vec2, f64)>(id)).unwrap_or((size, f64::NEG_INFINITY));
+    let changed = if last_size == size { changed } else { now };
+    ctx.data_mut(|d| d.insert_temp(id, (size, changed)));
+    let left = changed + RESIZE_SETTLE - now;
+    if left > 0.0 {
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(left + 0.02));
+    }
+    left > 0.0
+}
+
 /// The cover URL to paint at `px`: that size once it has loaded, else the size shown
 /// last for the same cover. A cover that changes size (going full screen, resizing the
 /// window) keeps showing instead of blanking until the new size arrives, or for good
@@ -277,6 +295,14 @@ fn fetch_px(px: u32) -> u32 {
 fn steady_url(ctx: &egui::Context, base: &str, px: u32) -> String {
     let want = sized(base, px);
     let id = egui::Id::unique(("cover-shown", base));
+    // Mid-resize, a cover that has a picture keeps it: every size step crossed would
+    // otherwise start a load, a decode and a texture upload for each cover on the page,
+    // and dragging the window edge would stutter. They catch up once it settles.
+    if resizing(ctx)
+        && let Some(shown) = ctx.data(|d| d.get_temp::<u32>(id))
+    {
+        return sized(base, shown);
+    }
     let ready = matches!(egui::Image::new(want.as_str()).load_for_size(ctx, Vec2::splat(px as f32)), Ok(egui::load::TexturePoll::Ready { .. }));
     if ready {
         ctx.data_mut(|d| d.insert_temp(id, px));

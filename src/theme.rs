@@ -138,20 +138,58 @@ impl Appearance {
     }
 }
 
-/// The system's light or dark mode, read again every couple of seconds so switching it
-/// shows without a restart. `None` where it can't be read.
-fn system_light() -> Option<bool> {
-    use std::time::{Duration, Instant};
-    static MODE: std::sync::Mutex<Option<(Instant, Option<bool>)>> = std::sync::Mutex::new(None);
-    let mut cached = MODE.lock_unpoisoned();
-    match *cached {
-        Some((at, m)) if at.elapsed() < Duration::from_secs(2) => m,
-        _ => {
-            let m = read_system_light();
-            *cached = Some((Instant::now(), m));
-            m
-        }
+/// The system's light or dark mode as last seen: 0 not read yet, 1 light, 2 dark,
+/// 3 can't be read. Kept fresh by `watch_system_appearance`.
+static SYSTEM_MODE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+fn encode_mode(m: Option<bool>) -> u8 {
+    match m {
+        Some(true) => 1,
+        Some(false) => 2,
+        None => 3,
     }
+}
+
+/// The system's light or dark mode, so switching it shows without a restart. `None`
+/// where it can't be read.
+fn system_light() -> Option<bool> {
+    use std::sync::atomic::Ordering::Relaxed;
+    if SYSTEM_MODE.load(Relaxed) == 0 {
+        SYSTEM_MODE.store(encode_mode(read_system_light()), Relaxed);
+    }
+    match SYSTEM_MODE.load(Relaxed) {
+        1 => Some(true),
+        2 => Some(false),
+        _ => None,
+    }
+}
+
+/// Watches the system's light or dark mode and wakes the UI the moment it changes. An
+/// idle app draws nothing, so without this a switch would show only once something
+/// else (the mouse, a track change) made it repaint. Cheap: a defaults read twice a
+/// second on a background thread, and a repaint only when the mode differs. Safe to
+/// call every frame; it starts once.
+pub fn watch_system_appearance(ctx: &egui::Context) {
+    use std::sync::atomic::Ordering::Relaxed;
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    if STARTED.is_completed() || read_system_light().is_none() {
+        return;
+    }
+    STARTED.call_once(|| {
+        let ctx = ctx.clone();
+        let spawned = std::thread::Builder::new().name("system-appearance".into()).spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                let now = encode_mode(read_system_light());
+                if SYSTEM_MODE.swap(now, Relaxed) != now {
+                    ctx.request_repaint();
+                }
+            }
+        });
+        if let Err(e) = spawned {
+            log::warn!("system appearance watcher: {e}");
+        }
+    });
 }
 
 /// macOS: the system's appearance, from the user defaults ("Dark" while it's dark, with
