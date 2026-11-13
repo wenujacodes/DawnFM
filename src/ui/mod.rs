@@ -1342,6 +1342,11 @@ impl eframe::App for App {
                 .show(ui, |ui| shell::sidebar(self, ui));
             self.scroll_panes.push(side.response.rect);
             let section = ui.available_rect_before_wrap();
+            // The built-in look keeps its colour to the sidebar: the pages beside it are
+            // plain, the same flat light or dark as the player bar under them.
+            if look.id == crate::preset::DEFAULT_ID {
+                ui.painter().rect_filled(section, 0.0, if theme::light() { theme::bg() } else { look.solid() });
+            }
             let q = theme::anim_bool(&ctx, "queue-drawer", self.queue_open && !self.np_open, 0.25);
             if q > 0.01 {
                 let r = egui::Panel::right("queue").resizable(false)
