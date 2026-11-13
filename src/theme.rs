@@ -791,12 +791,13 @@ fn visuals() -> egui::Visuals {
     v.window_fill = surface_fill();
     v.extreme_bg_color = glass(0.08);
     v.override_text_color = Some(text());
-    v.selection.bg_fill = with_alpha(RED, if light() { 0.3 } else { 0.5 });
+    v.selection.bg_fill = with_alpha(p.accent(RED), if light() { 0.3 } else { 0.5 });
     v.hyperlink_color = text();
     v.interact_cursor = Some(egui::CursorIcon::PointingHand);
     let pr = egui::CornerRadius::same(p.app.panel_radius.clamp(0.0, 32.0) as u8);
     v.window_corner_radius = pr;
-    v.menu_corner_radius = pr;
+    // The built-in look's menus are shaped like the system's.
+    v.menu_corner_radius = if p.id == crate::preset::DEFAULT_ID { egui::CornerRadius::same(8) } else { pr };
     v.window_stroke = egui::Stroke::new(1.0, glass(0.08));
     v.popup_shadow = egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: shade(if light() { 0.16 } else { 0.5 }) };
     let r = egui::CornerRadius::same(p.chrome.radius.clamp(2.0, 28.0) as u8);

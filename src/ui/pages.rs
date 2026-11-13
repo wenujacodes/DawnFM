@@ -1630,6 +1630,34 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
             app.appearance = a;
         }
         divider(ui);
+        // The built-in look's colour: its accent, and the tint of every page.
+        if app.look().id == crate::preset::DEFAULT_ID {
+            setting_row(ui, "Colour", Some("The accent, and the tint of the pages behind everything."), |ui| {
+                use crate::preset::COLOURS;
+                const SIDE: f32 = 20.0;
+                const GAP: f32 = 5.0;
+                let (row, _) = ui.allocate_exact_size(vec2(COLOURS.len() as f32 * (SIDE + GAP) - GAP, SIDE + 8.0), Sense::hover());
+                let current = crate::preset::colour().id;
+                for (i, c) in COLOURS.iter().enumerate() {
+                    let r = Rect::from_center_size(pos2(row.left() + SIDE / 2.0 + i as f32 * (SIDE + GAP), row.center().y), Vec2::splat(SIDE));
+                    let resp = ui.interact(r.expand(GAP / 2.0), ui.scope_id().with(("colour", c.id)), Sense::click());
+                    let resp = widgets::named(resp, c.name).on_hover_text(c.name).on_hover_cursor(egui::CursorIcon::PointingHand);
+                    let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.12);
+                    let on = theme::anim_bool(ui.ctx(), resp.id.with("on"), c.id == current, 0.15);
+                    let fill = crate::preset::hex(c.accent).unwrap_or(theme::RED);
+                    ui.painter().circle_filled(r.center(), SIDE / 2.0 - 2.0 + h, fill);
+                    if on > 0.0 {
+                        ui.painter().circle_stroke(r.center(), SIDE / 2.0 + 1.5, egui::Stroke::new(1.5, theme::with_alpha(theme::text(), on)));
+                    }
+                    if resp.clicked() {
+                        crate::preset::set_colour(c.id);
+                        // egui's own colours (the text selection) follow.
+                        app.chrome_applied = None;
+                    }
+                }
+            });
+            divider(ui);
+        }
         setting_row(ui, "Animated background", Some("The album art slowly drifts behind everything."), |ui| {
             toggle(ui, &mut app.anim_bg, "Animated background");
         });
@@ -1998,17 +2026,18 @@ fn dropdown_button(ui: &mut Ui, value: &str, width: f32, name: &str) -> egui::Re
 
 /// A dropdown option: hover glass, and a check on the chosen one.
 fn option_row(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
-    let resp = widgets::named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
-    let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.12);
-    if h > 0.0 || selected {
-        ui.painter().rect_filled(rect, 8.0, theme::glass(0.05 * selected as u8 as f32 + 0.08 * h));
+    // As a macOS menu draws a choice: its tick leading, the accent under the pointer.
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+    let resp = widgets::named(resp, label);
+    let over = resp.hovered();
+    if over {
+        ui.painter().rect_filled(rect, 5.0, app_accent(ui));
     }
-    let font = if selected { theme::semibold(14.0) } else { theme::regular(14.0) };
-    widgets::text_at(ui, pos2(rect.left() + 12.0, rect.center().y - 9.0), label, font, theme::text(), rect.width() - 44.0);
+    let fg = if over { Color32::WHITE } else { theme::text() };
     if selected {
-        widgets::icon_at(ui, pos2(rect.right() - 16.0, rect.center().y), theme::icon::CHECK, 15.0, theme::text());
+        widgets::icon_at(ui, pos2(rect.left() + 15.0, rect.center().y), theme::icon::CHECK, 13.0, fg);
     }
+    widgets::text_at(ui, pos2(rect.left() + 28.0, rect.center().y - 8.5), label, theme::regular(13.0), fg, rect.width() - 36.0);
     resp
 }
 

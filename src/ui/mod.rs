@@ -686,7 +686,11 @@ impl App {
             exiting: false,
             window_hidden: false,
             good_window: get("window"),
-            sidebar_collapsed: get("sidebar_collapsed").is_some_and(|v| v == "1"),
+            sidebar_collapsed: {
+                // Not a field: the built-in look reads its colour from the presets.
+                crate::preset::set_colour(get("colour").as_deref().unwrap_or_default());
+                get("sidebar_collapsed").is_some_and(|v| v == "1")
+            },
             playlist_order: get("playlist_order").map(|v| v.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect()).unwrap_or_default(),
             hidden_playlists: get("hidden_playlists").map(|v| v.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect()).unwrap_or_default(),
             coll_search: None,
@@ -1519,6 +1523,7 @@ impl eframe::App for App {
         }
         if std::env::var_os("YTM_THEME").is_none() {
             storage.set_string("theme", self.theme_id.clone());
+            storage.set_string("colour", crate::preset::colour().id.to_owned());
         }
         if dev_var("YTM_FONT").is_none() {
             storage.set_string("font", theme::font_choice());

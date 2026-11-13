@@ -400,6 +400,10 @@ impl Preset {
 
     /// The accent to use given the one sampled from the current cover.
     pub fn accent(&self, from_cover: Color32) -> Color32 {
+        // The built-in look's is the listener's pick (Settings › Appearance › Colour).
+        if self.id == DEFAULT_ID {
+            return hex(colour().accent).unwrap_or(from_cover);
+        }
         if self.accent == "system" {
             return crate::theme::system_accent().unwrap_or(from_cover);
         }
@@ -407,8 +411,43 @@ impl Preset {
     }
 
     pub fn solid(&self) -> Color32 {
-        hex(&self.background.solid).unwrap_or(crate::theme::bg())
+        let solid = if self.id == DEFAULT_ID { colour().solid } else { &self.background.solid };
+        hex(solid).unwrap_or(crate::theme::bg())
     }
+}
+
+/// A colour for the built-in look: the accent, which also tints the pages, and the
+/// near-black of the same hue they're drawn on.
+pub struct Colour {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub accent: &'static str,
+    pub solid: &'static str,
+}
+
+/// The first is the default: the look as it was before there was a choice.
+pub const COLOURS: &[Colour] = &[
+    Colour { id: "red", name: "Red", accent: DEFAULT_ACCENT, solid: "#0b090b" },
+    Colour { id: "orange", name: "Orange", accent: "#ff7a2f", solid: "#0c0907" },
+    Colour { id: "amber", name: "Amber", accent: "#f2b33d", solid: "#0b0a06" },
+    Colour { id: "green", name: "Green", accent: "#34c77b", solid: "#070b09" },
+    Colour { id: "teal", name: "Teal", accent: "#2bbfc4", solid: "#060b0c" },
+    Colour { id: "blue", name: "Blue", accent: "#3d8bff", solid: "#07090d" },
+    Colour { id: "indigo", name: "Indigo", accent: "#7371ff", solid: "#08080e" },
+    Colour { id: "purple", name: "Purple", accent: "#a960f5", solid: "#0a080d" },
+    Colour { id: "pink", name: "Pink", accent: "#ff5c9d", solid: "#0c080a" },
+];
+
+static COLOUR: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Pick the built-in look's colour by id; one that isn't there is the default.
+pub fn set_colour(id: &str) {
+    let i = COLOURS.iter().position(|c| c.id == id).unwrap_or(0);
+    COLOUR.store(i, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn colour() -> &'static Colour {
+    &COLOURS[COLOUR.load(std::sync::atomic::Ordering::Relaxed).min(COLOURS.len() - 1)]
 }
 
 /// Resolve a colour name from the presets: "white", "accent"/"cover", or "#rrggbb".
