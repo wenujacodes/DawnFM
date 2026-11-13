@@ -787,7 +787,10 @@ fn visuals() -> egui::Visuals {
     let p = crate::preset::active();
     let mut v = if light() { egui::Visuals::light() } else { egui::Visuals::dark() };
     v.panel_fill = bg();
-    v.window_fill = surface_fill();
+    // The built-in look's dark menus are the system's: its neutral dark grey under a
+    // light hairline, where the other looks keep their own tinted surface.
+    let mac_dark = p.id == crate::preset::DEFAULT_ID && !light();
+    v.window_fill = if mac_dark { Color32::from_rgb(40, 40, 42) } else { surface_fill() };
     v.extreme_bg_color = glass(0.08);
     v.override_text_color = Some(text());
     v.selection.bg_fill = with_alpha(p.accent(RED), if light() { 0.3 } else { 0.5 });
@@ -797,7 +800,7 @@ fn visuals() -> egui::Visuals {
     v.window_corner_radius = pr;
     // The built-in look's menus are shaped like the system's.
     v.menu_corner_radius = if p.id == crate::preset::DEFAULT_ID { egui::CornerRadius::same(8) } else { pr };
-    v.window_stroke = egui::Stroke::new(1.0, glass(0.08));
+    v.window_stroke = egui::Stroke::new(1.0, glass(if mac_dark { 0.17 } else { 0.08 }));
     v.popup_shadow = egui::epaint::Shadow { offset: [0, 8], blur: 28, spread: 0, color: shade(if light() { 0.16 } else { 0.5 }) };
     let r = egui::CornerRadius::same(p.chrome.radius.clamp(2.0, 28.0) as u8);
     for (w, fill) in [
