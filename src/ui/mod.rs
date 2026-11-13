@@ -1249,7 +1249,11 @@ impl eframe::App for App {
             // In the tray, minimized or covered: nothing to draw, only the player
             // bookkeeping. Track changes and media keys wake the loop themselves.
             if playing || self.buffering {
-                ctx.request_repaint_after(Duration::from_secs(1));
+                // Coming back from minimized or from under another window wakes nothing
+                // by itself (eframe only notes it), so the first frame is this tick:
+                // short, or the window sits on its old frame for up to a second. The
+                // tray is left by a click that draws at once, so it keeps the slow one.
+                ctx.request_repaint_after(if self.tray.is_some() { Duration::from_secs(1) } else { Duration::from_millis(150) });
             }
         } else if self.np_open && playing && !self.mini.busy() {
             ctx.request_repaint_after(Duration::from_millis(33));
