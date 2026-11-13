@@ -1320,6 +1320,11 @@ impl eframe::App for App {
                 self.mini.fade_in(&ctx, now, shell::base_color(self));
             }
             dev_screenshot(&ctx, now);
+            // A click takes effect in the next frame's `logic`: have that frame now, not at
+            // the idle pacing's next tick.
+            if !self.actions.is_empty() {
+                ctx.request_repaint();
+            }
             return;
         }
         shell::background(self, ui, screen, now, covered.then_some(bar_strip));
@@ -1423,6 +1428,11 @@ impl eframe::App for App {
         shell::suggestions(self, &ctx);
         shell::search_results(self, &ctx);
         shell::toast(self, &ctx, now);
+        // A click takes effect in the next frame's `logic`: have that frame now, not at
+        // the idle pacing's next tick.
+        if !self.actions.is_empty() {
+            ctx.request_repaint();
+        }
 
         // The player keeps the window buttons too: the top right stays the window's.
         titlebar::window_buttons(&ctx);

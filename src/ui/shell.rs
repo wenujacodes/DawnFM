@@ -1124,9 +1124,11 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         // The filled star grows in under the ring rather than replacing it, as the
         // reference's own two-weight mark does.
         let tint = theme::lerp_color(ink(h), accent, pop).gamma_multiply(dim);
-        glyphs::draw(ui, r.rect.center(), 18.0, glyphs::STAR, tint);
+        // It swells a quarter on the way, as the mini player's does.
+        let size = 18.0 * (1.0 + 0.25 * (pop * std::f32::consts::PI).sin());
+        glyphs::draw(ui, r.rect.center(), size, glyphs::STAR, tint);
         if pop > 0.0 {
-            glyphs::draw(ui, r.rect.center(), 18.0, glyphs::STAR_FILLED, theme::with_alpha(tint, tint.a() as f32 / 255.0 * pop));
+            glyphs::draw(ui, r.rect.center(), size, glyphs::STAR_FILLED, theme::with_alpha(tint, tint.a() as f32 / 255.0 * pop));
         }
         if r.clicked()
             && let Some(t) = heard
