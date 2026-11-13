@@ -591,11 +591,15 @@ const CANDIDATES: &[(&str, u32)] = &[
     ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf", 0),
     ("/System/Library/Fonts/Hiragino Sans GB.ttc", 0),
     ("/System/Library/Fonts/AppleSDGothicNeo.ttc", 0),
+    // Sinhala, which Arial Unicode lacks: song titles, artists and lyrics.
+    (SINHALA, 0),
     ("/System/Library/Fonts/Apple Symbols.ttf", 0),
 ];
 
-/// Semibold and bold faces of the fallbacks (none listed on macOS).
-const HEAVIER: &[(&str, [(&str, u32); 2])] = &[];
+const SINHALA: &str = "/System/Library/Fonts/Supplemental/Sinhala Sangam MN.ttc";
+
+/// Semibold and bold faces of the fallbacks: Sinhala Sangam MN's bold for both.
+const HEAVIER: &[(&str, [(&str, u32); 2])] = &[(SINHALA, [(SINHALA, 1), (SINHALA, 1)])];
 
 /// Ascent and line height in em, as egui lays text out (skrifa's metrics: OS/2 typo
 /// values when the font asks for them, else hhea).
