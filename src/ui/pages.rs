@@ -51,6 +51,10 @@ pub fn page(app: &mut App, ui: &mut Ui, now: f64) {
     let page = app.page.clone();
     // Each page (each album, each search) keeps its own scroll position.
     let mut area = egui::ScrollArea::vertical().id_salt(("page", &page)).auto_shrink(false);
+    // Settings always starts at the top when navigated to.
+    if matches!(page, Page::Settings) && t < 1.0 {
+        area = area.vertical_scroll_offset(0.0);
+    }
     // The scroll bar hugs the right edge of the pages.
     ui.spacing_mut().scroll.bar_outer_margin = 2.0 + super::titlebar::edge_inset();
     // Dev hook: YTM_SCROLL=<px> pins the page scroll, for screenshots of lower sections.
