@@ -153,7 +153,7 @@ fn nav_bg(ui: &Ui, look: NavLook, rect: Rect, h: f32, s: f32) -> Color32 {
 }
 
 /// Sidebar width expanded and collapsed to an icon rail (points).
-pub const SIDEBAR_W: f32 = 236.0;
+pub const SIDEBAR_W: f32 = 220.0;
 pub const RAIL_W: f32 = 76.0;
 
 /// How collapsed the sidebar is, 0 (full) to 1 (icon rail), eased over the toggle.
@@ -229,9 +229,10 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
 
     let mut go_to: Option<Page> = None;
     let look = NavLook::of(app);
-    // Draws one row: `paint` puts its icon at the given point in the given colour.
+    // Draws one row, with the measures of Music's sidebar (30 points, 13-point labels):
+    // `paint` puts its icon at the given point in the given colour.
     let row = |ui: &mut Ui, paint: &dyn Fn(&Ui, Pos2, Color32), label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
-        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
         let mut resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
         if collapsed {
             resp = resp.on_hover_text(label);
@@ -242,29 +243,29 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         paint(ui, pos2(rect.left() + ICON_X, rect.center().y), icon_fg);
         if a > 0.0 {
             let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
-            let font = if selected { theme::semibold(14.0) } else { theme::regular(14.0) };
-            ui.painter().text(pos2(rect.left() + 48.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
+            let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
+            ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
         }
         if resp.clicked() {
             *go_to = Some(page);
         }
     };
     let icon_row = |ui: &mut Ui, glyph: char, label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
-        row(ui, &|ui: &Ui, at: Pos2, c: Color32| icon_at(ui, at, glyph, 17.0, c), label, page, selected, go_to);
+        row(ui, &|ui: &Ui, at: Pos2, c: Color32| icon_at(ui, at, glyph, 15.0, c), label, page, selected, go_to);
     };
     // A section's heading; a click folds the section away (remembered across launches).
     // On the collapsed rail headings fold away and every section shows.
     let section = |ui: &mut Ui, title: &str| -> bool {
         let key = egui::Id::unique(("sidebar-section", title));
         let mut open = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(key, || true));
-        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0 * (1.0 - t)), Sense::click());
+        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0 * (1.0 - t)), Sense::click());
         if a > 0.0 {
             let resp = named(resp, title).on_hover_cursor(egui::CursorIcon::PointingHand);
             let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
             let c = theme::with_alpha(theme::lerp_color(theme::text_faint(), theme::text_dim(), h), a);
-            ui.painter().text(pos2(r.left() + 8.0, r.center().y), Align2::LEFT_CENTER, title, theme::semibold(12.0), c);
+            ui.painter().text(pos2(r.left() + 8.0, r.center().y), Align2::LEFT_CENTER, title, theme::semibold(11.0), c);
             let k = theme::anim_bool(ui.ctx(), resp.id.with("open"), open, 0.15);
-            icon_at(ui, pos2(r.right() - 12.0, r.center().y), if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 14.0, c);
+            icon_at(ui, pos2(r.right() - 12.0, r.center().y), if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 12.0, c);
             if resp.clicked() && !collapsed {
                 open = !open;
                 ui.data_mut(|d| d.insert_persisted(key, open));
@@ -273,7 +274,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         open || collapsed
     };
     let nav = |ui: &mut Ui, glyph: &'static [u8], size: f32, label: &str, page: Page, selected: bool, go_to: &mut Option<Page>| {
-        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 30.0), Sense::click());
         let mut resp = named(resp, label).on_hover_cursor(egui::CursorIcon::PointingHand);
         if collapsed {
             resp = resp.on_hover_text(label);
@@ -284,28 +285,29 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), size, glyph, icon_fg);
         if a > 0.0 {
             let fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
-            let font = if selected { theme::semibold(14.0) } else { theme::regular(14.0) };
-            ui.painter().text(pos2(rect.left() + 48.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
+            let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
+            ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, theme::with_alpha(fg, a));
         }
         if resp.clicked() {
             *go_to = Some(page);
         }
     };
     let p = app.page.clone();
-    const APPLE: f32 = glyphs::APPLE_GLYPH;
-    const LUCIDE: f32 = glyphs::LUCIDE_GLYPH;
+    // A size down from the desktop app's, for the shorter rows.
+    const APPLE: f32 = glyphs::APPLE_GLYPH - 3.0;
+    const LUCIDE: f32 = glyphs::LUCIDE_GLYPH - 2.0;
     // The search box, or on the collapsed rail its icon, which opens the sidebar to it.
     if collapsed {
         nav(ui, glyphs::SEARCH, APPLE, "Search", Page::Search(String::new()), false, &mut go_to);
     } else {
         search_field(app, ui, ui.available_width());
-        ui.add_space(8.0);
+        ui.add_space(6.0);
     }
     if section(ui, "YouTube Music") {
         nav(ui, glyphs::HOME, APPLE, "Home", Page::Home, p == Page::Home, &mut go_to);
         nav(ui, glyphs::EXPLORE, APPLE, "New", Page::New, p == Page::New, &mut go_to);
     }
-    ui.add_space(6.0);
+    ui.add_space(4.0);
     if section(ui, "Library") {
         let lib = |tab: LibTab| p == Page::Library(tab);
         nav(ui, glyphs::LIBRARY, APPLE, "Playlists", Page::Library(LibTab::Playlists), lib(LibTab::Playlists), &mut go_to);
@@ -314,7 +316,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         icon_row(ui, icon::HISTORY, "Recently Played", Page::Library(LibTab::History), lib(LibTab::History), &mut go_to);
         nav(ui, glyphs::DOWNLOAD, APPLE, "Downloads", Page::Downloads, p == Page::Downloads, &mut go_to);
     }
-    ui.add_space(6.0);
+    ui.add_space(4.0);
     let playlists_open = section(ui, "Playlists");
 
     // Playlists that appeared since the order was last changed join it at the end, so a
@@ -334,7 +336,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
 
     let transferring = super::transfer::sidebar_visible(app, ui.input(|i| i.time));
     // Room under the list: Settings, the app's sign-off, and the transfer card.
-    let bottom_h = if transferring { 112.0 } else { 48.0 };
+    let bottom_h = if transferring { 106.0 } else { 42.0 };
     let list_h = (ui.available_height() - bottom_h).max(0.0);
     ui.allocate_ui(vec2(ui.available_width(), list_h), |ui| {
         if !app.logged_in {
@@ -388,7 +390,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
             let down = ui.input(|i| i.pointer.any_down());
             let pointer = ui.input(|i| i.pointer.interact_pos());
             for c in &visible {
-                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::click_and_drag());
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click_and_drag());
                 let id = match &c.target {
                     Target::Playlist(id) => id.clone(),
                     _ => continue,
@@ -414,13 +416,13 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                 let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
                 let selected = matches!(&c.target, Target::Playlist(id) if app.page == Page::Playlist(id.clone()));
                 let lift = if is_dragged { 0.10 } else { 0.0 };
-                ui.painter().rect_filled(rect, 8.0, theme::glass(0.05 * h + if selected { 0.08 } else { 0.0 } + lift));
-                let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(28.0));
+                ui.painter().rect_filled(rect, look.radius, theme::glass(0.05 * h + if selected { 0.08 } else { 0.0 } + lift));
+                let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(22.0));
                 paint_cover(ui, img, &c.thumbs, theme::thumb_radius(), 1.0);
                 if a > 0.0 {
-                    let w = full_w - 58.0;
+                    let w = full_w - 54.0;
                     let fg = if selected { theme::text() } else { theme::lerp_color(theme::text_dim(), theme::text(), h) };
-                    text_at(ui, pos2(rect.left() + 48.0, rect.center().y - 9.0), &c.title, theme::regular(14.0), theme::with_alpha(fg, a), w);
+                    text_at(ui, pos2(rect.left() + 44.0, rect.center().y - 8.5), &c.title, theme::regular(13.0), theme::with_alpha(fg, a), w);
                 }
                 egui::Popup::context_menu(&resp).show(|ui| {
                     ui.set_min_width(190.0);
@@ -491,20 +493,20 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     }
 }
 
-/// The search pill: typeahead, suggestions and Enter to search. The Search page draws
+/// The search box: typeahead, suggestions and Enter to search. The Search page draws
 /// it; `app.search_rect` anchors the suggestions under it.
 pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
-    // Anywhere on the pill focuses the box, not just on the text area inside it.
-    let (rect, field) = ui.allocate_exact_size(vec2(width, 42.0), Sense::click());
+    // Anywhere on it focuses the box, not just on the text area inside it.
+    let (rect, field) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
     let field = field.on_hover_cursor(egui::CursorIcon::Text);
     let focus = theme::anim_bool(ui.ctx(), "search-focus", app.search_focused, 0.2);
-    ui.painter().rect_filled(rect, 21.0, theme::glass(0.09 + 0.05 * focus));
+    ui.painter().rect_filled(rect, 8.0, theme::glass(0.09 + 0.05 * focus));
     if focus > 0.0 {
-        ui.painter().rect_stroke(rect, 21.0, egui::Stroke::new(1.0, theme::glass(0.25 * focus)), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(rect, 8.0, egui::Stroke::new(1.0, theme::glass(0.25 * focus)), egui::StrokeKind::Inside);
     }
-    icon_at(ui, pos2(rect.left() + 22.0, rect.center().y), icon::SEARCH, 17.0, theme::text_dim());
+    icon_at(ui, pos2(rect.left() + 17.0, rect.center().y), icon::SEARCH, 15.0, theme::text_dim());
     let clearable = !app.search_text.is_empty();
-    let inner = Rect::from_min_max(pos2(rect.left() + 42.0, rect.top() + 4.0), pos2(rect.right() - if clearable { 46.0 } else { 16.0 }, rect.bottom() - 4.0));
+    let inner = Rect::from_min_max(pos2(rect.left() + 34.0, rect.top() + 3.0), pos2(rect.right() - if clearable { 34.0 } else { 12.0 }, rect.bottom() - 3.0));
     // Up and Down walk the suggestions (past either end back to what was typed). Taken
     // before the box sees them, where they'd move the caret. Only bare arrows (Shift
     // selects text), and only suggestions for what's typed now, not ones still being replaced.
@@ -532,7 +534,7 @@ pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
         inner,
         egui::TextEdit::singleline(&mut app.search_text)
             .hint_text(egui::RichText::new("Search").color(theme::text_faint()))
-            .font(theme::regular(15.0))
+            .font(theme::regular(13.5))
             .frame(egui::Frame::NONE)
             .align(egui::Align2::LEFT_CENTER)
             .desired_width(inner.width()),
@@ -544,13 +546,13 @@ pub fn search_field(app: &mut App, ui: &mut Ui, width: f32) {
     app.search_focused = edit.has_focus();
     let mut cleared = false;
     if clearable {
-        let x = Rect::from_center_size(pos2(rect.right() - 25.0, rect.center().y), Vec2::splat(30.0));
+        let x = Rect::from_center_size(pos2(rect.right() - 18.0, rect.center().y), Vec2::splat(24.0));
         let resp = named(ui.interact(x, ui.scope_id().with("search-clear"), Sense::click()), "Clear search").on_hover_cursor(egui::CursorIcon::PointingHand);
         let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
         if h > 0.0 {
-            ui.painter().circle_filled(x.center(), 15.0, theme::glass(0.10 * h));
+            ui.painter().circle_filled(x.center(), 12.0, theme::glass(0.10 * h));
         }
-        icon_at(ui, x.center(), icon::X, 16.0, theme::lerp_color(theme::text_dim(), theme::text(), h));
+        icon_at(ui, x.center(), icon::X, 14.0, theme::lerp_color(theme::text_dim(), theme::text(), h));
         if resp.clicked() {
             // Back to the empty search page: the old results go with the text.
             app.search_text.clear();
