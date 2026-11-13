@@ -1639,7 +1639,7 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
                     if resp.clicked() {
                         crate::preset::set_colour(c.id);
                         // egui's own colours (the text selection) follow.
-                        app.chrome_applied = None;
+                        theme::apply_chrome(ui.ctx(), app.look());
                     }
                 }
             });
