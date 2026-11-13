@@ -1127,6 +1127,7 @@ impl App {
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         dev_pace();
+        theme::watch_system_appearance(ctx);
         self.lyric_view.release_hidden(ctx.cumulative_pass_nr());
         let now = ctx.input(|i| i.time);
         self.sync_look();
