@@ -1030,22 +1030,6 @@ pub fn h_scroll<R>(ui: &mut Ui, id: &str, nudge: i32, count: usize, item_width: 
         add(ui)
     }).inner);
     ui.ctx().data_mut(|d| d.insert_temp(viewport_id, out.inner_rect.width()));
-    // Cards cut off at an edge fade into the page: the right while there's more to
-    // see, the left once scrolled.
-    let (r, off) = (out.inner_rect, out.state.clamped_offset().x);
-    let left_over = out.content_size.x - r.width() - off;
-    let base = if theme::light() { theme::bg() } else { crate::preset::active().solid() };
-    const FADE: f32 = 110.0;
-    if off > 0.5 {
-        let k = (off / FADE).min(1.0) * 0.85;
-        let band = Rect::from_min_max(r.left_top(), pos2(r.left() + FADE, r.bottom()));
-        ui.painter().add(egui::Shape::gradient_rect(band, egui::Direction::LeftToRight, [base.gamma_multiply(k), Color32::TRANSPARENT]));
-    }
-    if left_over > 0.5 {
-        let k = (left_over / FADE).min(1.0) * 0.85;
-        let band = Rect::from_min_max(pos2(r.right() - FADE, r.top()), r.right_bottom());
-        ui.painter().add(egui::Shape::gradient_rect(band, egui::Direction::RightToLeft, [base.gamma_multiply(k), Color32::TRANSPARENT]));
-    }
     (out.inner, reached_end)
 }
 
