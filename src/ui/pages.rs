@@ -1733,10 +1733,6 @@ fn settings_window(app: &mut App, ui: &mut Ui) {
             toggle(ui, &mut app.notify_songs, "Notify on song change");
         });
         divider(ui);
-        setting_row(ui, "Collapse sidebar", Some("Show only icons in the sidebar, for narrow windows. The menu button at its top does the same."), |ui| {
-            toggle(ui, &mut app.sidebar_collapsed, "Collapse sidebar");
-        });
-        divider(ui);
         let api = crate::renderer::api_name();
         let title = format!("Draw with {api}");
         let desc = format!(
