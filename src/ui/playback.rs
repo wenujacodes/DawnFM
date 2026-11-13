@@ -41,6 +41,10 @@ impl App {
             return;
         }
         let Some(l) = self.lyric_choice() else { return };
+        // A Sinhala song is shown as written: nothing to ask for.
+        if l.lines.iter().any(|x| crate::translate::sinhala(&x.text)) {
+            return;
+        }
         let Some((id, _)) = &self.lyrics else { return };
         let target = self.lyric_prefs.target.clone();
         let want = (id.clone(), l.provider.key().to_owned(), target.clone());
