@@ -2115,7 +2115,7 @@ pub(super) fn divider(ui: &mut Ui) {
 
 /// On/off switch tinted with the accent.
 pub(super) fn toggle(ui: &mut Ui, on: &mut bool, name: &str) -> egui::Response {
-    let (rect, mut resp) = ui.allocate_exact_size(vec2(44.0, 26.0), Sense::click());
+    let (rect, mut resp) = ui.allocate_exact_size(vec2(46.0, 22.0), Sense::click());
     if resp.clicked() {
         *on = !*on;
         resp.mark_changed();
@@ -2128,10 +2128,10 @@ pub(super) fn toggle(ui: &mut Ui, on: &mut bool, name: &str) -> egui::Response {
     let accent = ui.ctx().data(|d| d.get_temp::<Color32>(egui::Id::unique("accent"))).unwrap_or(theme::RED);
     let fade = if ui.is_enabled() { 1.0 } else { 0.4 };
     let off = theme::glass(0.16 + 0.06 * h);
-    ui.painter().rect_filled(rect, 13.0, theme::with_alpha(theme::lerp_color(off, accent, t), fade));
-    let knob = pos2(egui::lerp(rect.left() + 13.0..=rect.right() - 13.0, t), rect.center().y);
-    ui.painter().circle_filled(knob + vec2(0.0, 1.0), 10.0, theme::shade(0.25 * fade));
-    ui.painter().circle_filled(knob, 10.0, theme::with_alpha(Color32::WHITE, fade));
+    ui.painter().rect_filled(rect, 11.0, theme::with_alpha(theme::lerp_color(off, accent, t), fade));
+    let knob = pos2(egui::lerp(rect.left() + 11.0..=rect.right() - 11.0, t), rect.center().y);
+    ui.painter().circle_filled(knob + vec2(0.0, 1.0), 8.0, theme::shade(0.25 * fade));
+    ui.painter().circle_filled(knob, 8.0, theme::with_alpha(Color32::WHITE, fade));
     resp
 }
 
