@@ -173,8 +173,8 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
         }
         if beside_cover && art_vis < 0.999 {
             // The song on a frosted card over the cover, centred under it. While it plays
-            // the card is just the title and artist: it opens to the seek line and the
-            // transport under the pointer, and goes away once the pointer rests elsewhere.
+            // the card is just the title and artist, and it opens to the seek line and the
+            // transport under the pointer.
             let w = (content.width() * 0.38).clamp(300.0, 440.0);
             let cw = w + 40.0;
             // The cover is a square of the window's height from its left edge; `area` is
@@ -189,13 +189,8 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             // A seek being dragged or the ⋯ menu keeps it as it is.
             let busy = app.seek_drag.is_some() || egui::Popup::is_any_open(&ctx);
             let open = theme::anim_bool(&ctx, "np-card-open", over || busy || !(app.playing() || app.buffering), 0.25);
-            let idle = now - app.last_pointer_move;
-            let seen = theme::anim_bool(&ctx, "np-card-seen", idle < 2.0 || over || busy, 0.35);
-            if (open > 0.0 && open < 1.0) || (seen > 0.0 && seen < 1.0) {
+            if open > 0.0 && open < 1.0 {
                 super::animate(&ctx);
-            } else if idle < 2.0 {
-                // A frame for when the fade should start.
-                ctx.request_repaint_after(std::time::Duration::from_secs_f64((2.0 - idle).max(0.05)));
             }
             let h = 70.0 + 126.0 * open;
             let card = Rect::from_min_size(pos2(left, content.bottom() - h), vec2(cw, h));
@@ -203,7 +198,7 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             let mut cui = ui.new_child(egui::UiBuilder::new().max_rect(card));
             // Folded, the controls are past its bottom edge: neither drawn nor clickable.
             cui.set_clip_rect(card.intersect(ui.clip_rect()));
-            cui.multiply_opacity((1.0 - art_vis) * seen);
+            cui.multiply_opacity(1.0 - art_vis);
             cui.painter().rect_filled(card, 18.0, theme::shade(0.42));
             cui.painter().rect_filled(card, 18.0, theme::glass(0.07));
             cui.painter().rect_stroke(card, 18.0, egui::Stroke::new(1.0, theme::glass(0.12)), egui::StrokeKind::Inside);
