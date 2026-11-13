@@ -138,8 +138,8 @@ impl Appearance {
     }
 }
 
-/// Windows' "app mode" (Settings › Personalization › Colors), read again every couple
-/// of seconds so switching it there shows without a restart. `None` off Windows.
+/// The system's light or dark mode, read again every couple of seconds so switching it
+/// shows without a restart. `None` where it can't be read.
 fn system_light() -> Option<bool> {
     use std::time::{Duration, Instant};
     static MODE: std::sync::Mutex<Option<(Instant, Option<bool>)>> = std::sync::Mutex::new(None);
@@ -154,6 +154,25 @@ fn system_light() -> Option<bool> {
     }
 }
 
+/// macOS: the system's appearance, from the user defaults ("Dark" while it's dark, with
+/// Auto too; nothing while it's light). Not the window's own, which is what eframe
+/// reports: `install_style` pins that to dark for egui, so it would never say light.
+#[cfg(target_os = "macos")]
+fn read_system_light() -> Option<bool> {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::NSString;
+    // SAFETY: Foundation calls with the argument and return types they declare;
+    // NSUserDefaults is safe to read from any thread.
+    let style: Option<Retained<NSString>> = unsafe {
+        let defaults: Retained<AnyObject> = msg_send![objc2::class!(NSUserDefaults), standardUserDefaults];
+        msg_send![&*defaults, stringForKey: &*NSString::from_str("AppleInterfaceStyle")]
+    };
+    Some(!style.is_some_and(|s| s.to_string().eq_ignore_ascii_case("dark")))
+}
+
+#[cfg(not(target_os = "macos"))]
 fn read_system_light() -> Option<bool> {
     None
 }
