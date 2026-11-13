@@ -691,45 +691,49 @@ fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
             let save_id = if is_album { c.save_id.clone() } else { (!c.owned).then(|| id.to_owned()) };
             let owned = !is_album && c.owned;
             // Bottom-aligned with the cover, as in Music: title, artist, kind and year, buttons.
-            ui.add_space((side - 200.0).max(6.0));
+            // The account's own lists have no byline row (it'd only name the listener), so
+            // the rest sits lower by its height to stay bottom-aligned.
+            ui.add_space((side - 200.0).max(6.0) + if auto { 42.0 } else { 0.0 });
             let title = widgets::galley_wrapped(ui, &c.title, theme::bold(34.0), theme::text(), ui.available_width(), 2);
             ui.label(title);
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
-                if let Some(a) = c.artists.first() {
-                    let (r, _) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
-                    ui.painter().circle_filled(r.center(), 17.0, theme::glass(0.10));
-                    match photo {
-                        Some(t) => paint_cover(ui, r, t, 17.0, 1.0),
-                        None => widgets::icon_at(ui, r.center(), icon::CIRCLE_USER, 18.0, theme::text_dim()),
+            if !auto {
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
+                    if let Some(a) = c.artists.first() {
+                        let (r, _) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
+                        ui.painter().circle_filled(r.center(), 17.0, theme::glass(0.10));
+                        match photo {
+                            Some(t) => paint_cover(ui, r, t, 17.0, 1.0),
+                            None => widgets::icon_at(ui, r.center(), icon::CIRCLE_USER, 18.0, theme::text_dim()),
+                        }
+                        let name = widgets::galley(ui, &a.name, theme::semibold(20.0), theme::text(), 360.0);
+                        let (nr, resp) = ui.allocate_exact_size(name.size(), Sense::click());
+                        let resp = named(resp, &a.name).on_hover_cursor(egui::CursorIcon::PointingHand);
+                        let fg = if resp.hovered() { theme::lerp_color(theme::text(), app_accent(ui), 0.5) } else { theme::text() };
+                        ui.painter().galley(nr.min, name, fg);
+                        if resp.clicked()
+                            && let Some(aid) = &a.id
+                        {
+                            acts.push(Action::Open(Target::Artist(aid.clone())));
+                        }
+                    } else {
+                        ui.label(RichText::new(c.byline()).font(theme::semibold(18.0)).color(theme::text_dim()));
                     }
-                    let name = widgets::galley(ui, &a.name, theme::semibold(20.0), theme::text(), 360.0);
-                    let (nr, resp) = ui.allocate_exact_size(name.size(), Sense::click());
-                    let resp = named(resp, &a.name).on_hover_cursor(egui::CursorIcon::PointingHand);
-                    let fg = if resp.hovered() { theme::lerp_color(theme::text(), app_accent(ui), 0.5) } else { theme::text() };
-                    ui.painter().galley(nr.min, name, fg);
-                    if resp.clicked()
-                        && let Some(aid) = &a.id
-                    {
-                        acts.push(Action::Open(Target::Artist(aid.clone())));
+                    // Saved to the library: a tick; otherwise a plus to save it.
+                    if let Some(save_id) = save_id.clone() {
+                        let (r, resp) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::click());
+                        let name = if saved { "Remove from library" } else { "Save to library" };
+                        let resp = named(resp, name).on_hover_text(name).on_hover_cursor(egui::CursorIcon::PointingHand);
+                        let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
+                        ui.painter().rect_filled(r, 8.0, theme::glass(0.10 + 0.08 * h));
+                        widgets::icon_at(ui, r.center(), if saved { icon::CHECK } else { icon::LIST_PLUS }, 17.0, theme::text());
+                        if resp.clicked() {
+                            acts.push(Action::SaveCollection(save_id, !saved));
+                        }
                     }
-                } else {
-                    ui.label(RichText::new(c.byline()).font(theme::semibold(18.0)).color(theme::text_dim()));
-                }
-                // Saved to the library: a tick; otherwise a plus to save it.
-                if let Some(save_id) = save_id.clone() {
-                    let (r, resp) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::click());
-                    let name = if saved { "Remove from library" } else { "Save to library" };
-                    let resp = named(resp, name).on_hover_text(name).on_hover_cursor(egui::CursorIcon::PointingHand);
-                    let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
-                    ui.painter().rect_filled(r, 8.0, theme::glass(0.10 + 0.08 * h));
-                    widgets::icon_at(ui, r.center(), if saved { icon::CHECK } else { icon::LIST_PLUS }, 17.0, theme::text());
-                    if resp.clicked() {
-                        acts.push(Action::SaveCollection(save_id, !saved));
-                    }
-                }
-            });
+                });
+            }
             ui.add_space(8.0);
             ui.label(RichText::new(header_meta(c)).font(theme::semibold(13.0)).color(theme::text_dim()));
             ui.add_space(16.0);
