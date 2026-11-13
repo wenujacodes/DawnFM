@@ -557,8 +557,8 @@ pub fn suggestions(app: &mut App, ctx: &egui::Context) {
             ui.set_opacity(t);
             egui::Frame::new()
                 .fill(if theme::light() { theme::menu_fill() } else { Color32::from_rgba_premultiplied(50, 48, 52, 230) })
-                .corner_radius(if theme::light() { 14 } else { 8 })
-                .inner_margin(if theme::light() { 6 } else { 4 })
+                .corner_radius(if theme::light() { 14 } else { 10 })
+                .inner_margin(6)
                 .stroke(if theme::light() { egui::Stroke::NONE } else { egui::Stroke::new(0.5, Color32::from_white_alpha(40)) })
                 .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: theme::shade(if theme::light() { 0.16 } else { 0.5 }) })
                 .show(ui, |ui| {
@@ -660,8 +660,8 @@ pub fn search_results(app: &mut App, ctx: &egui::Context) {
         ui.set_opacity(t);
         egui::Frame::new()
             .fill(if theme::light() { theme::menu_fill() } else { Color32::from_rgba_premultiplied(50, 48, 52, 230) })
-            .corner_radius(if theme::light() { 14 } else { 8 })
-            .inner_margin(if theme::light() { 8 } else { 6 })
+            .corner_radius(if theme::light() { 14 } else { 10 })
+            .inner_margin(8)
             .stroke(if theme::light() { egui::Stroke::NONE } else { egui::Stroke::new(0.5, Color32::from_white_alpha(40)) })
             .shadow(egui::epaint::Shadow { offset: [0, 10], blur: 30, spread: 0, color: theme::shade(if theme::light() { 0.16 } else { 0.5 }) })
             .show(ui, |ui| {
