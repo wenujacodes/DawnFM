@@ -104,6 +104,7 @@ pub fn install(wake: impl Fn() + Send + Sync + Clone + 'static) {
             &PredefinedMenuItem::fullscreen(None),
         ])?;
         window.append_items(&[
+            &PredefinedMenuItem::close_window(None),
             &PredefinedMenuItem::minimize(None),
             &PredefinedMenuItem::maximize(Some("Zoom")),
             &sep(),

@@ -14,6 +14,7 @@ pub enum Cmd {
     Toggle,
     Next,
     Prev,
+    Show,
 }
 
 static PENDING: Mutex<Vec<Cmd>> = Mutex::new(Vec::new());
@@ -34,10 +35,18 @@ static STATE: Mutex<State> = Mutex::new(State { title: None, playing: false });
 /// copies the title when it changes.
 pub fn set_state(title: Option<&str>, playing: bool) {
     let mut s = STATE.lock_unpoisoned();
+    let was_playing = s.playing;
     s.playing = playing;
     if s.title.as_deref() != title {
         s.title = title.map(str::to_owned);
     }
+    if was_playing != playing {
+        mac::set_playback_activity(playing);
+    }
+}
+
+pub fn stop_activity() {
+    mac::set_playback_activity(false);
 }
 
 fn push(cmd: Cmd) {
@@ -103,10 +112,49 @@ mod mac {
 
     /// The items' target. Menu items don't retain theirs: this one is made once and never freed.
     static TARGET: AtomicPtr<Target> = AtomicPtr::new(std::ptr::null_mut());
+    static ACTIVITY: std::sync::Mutex<Option<usize>> = std::sync::Mutex::new(None);
+
+    /// Prevent macOS App Nap and idle system sleep while music is playing, so playback
+    /// does not stutter or stop when the window is hidden or minimized to the Dock.
+    pub(super) fn set_playback_activity(playing: bool) {
+        let mut act = ACTIVITY.lock_unpoisoned();
+        if playing && act.is_none() {
+            unsafe {
+                let info: Retained<AnyObject> = msg_send![objc2::class!(NSProcessInfo), processInfo];
+                let reason = NSString::from_str("Music Playback");
+                // NSActivityUserInitiated (0x00FFFFFF) | NSActivityLatencyCritical (0xFF00000000)
+                // Disables App Nap and idle system sleep while music is playing.
+                let options: u64 = 0x00FF_FFFF | 0xFF_0000_0000;
+                let token: Retained<AnyObject> = msg_send![&*info, beginActivityWithOptions: options, reason: &*reason];
+                let ptr = Retained::as_ptr(&token).cast_mut();
+                std::mem::forget(token);
+                *act = Some(ptr as usize);
+            }
+        } else if !playing && act.is_some() {
+            if let Some(ptr) = act.take() {
+                unsafe {
+                    let token_ptr = ptr as *mut AnyObject;
+                    let info: Retained<AnyObject> = msg_send![objc2::class!(NSProcessInfo), processInfo];
+                    let _: () = msg_send![&*info, endActivity: token_ptr];
+                    let _: () = msg_send![token_ptr, release];
+                }
+            }
+        }
+    }
 
     pub(super) fn new_target() -> Retained<Target> {
         // SAFETY: `new` on an NSObject subclass returns a retained instance.
         unsafe { msg_send![Target::class(), new] }
+    }
+
+    /// `- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)flag`,
+    /// added to the delegate's class so clicking the Dock icon restores the hidden window.
+    unsafe extern "C-unwind" fn reopen(_this: *mut AnyObject, _cmd: Sel, app: *mut AnyObject, _has_visible_windows: bool) -> bool {
+        super::push(Cmd::Show);
+        unsafe {
+            let _: () = msg_send![app, activateIgnoringOtherApps: true];
+        }
+        true
     }
 
     /// `- (NSMenu *)applicationDockMenu:(NSApplication *)sender`, added to the delegate's class.
@@ -163,35 +211,54 @@ mod mac {
             return;
         };
         let class = delegate.class();
-        let sel = sel!(applicationDockMenu:);
-        if class.responds_to(sel) {
-            log::warn!("dock: {} already has a Dock menu; leaving it", class.name().to_string_lossy());
-            return;
+        let mut needs_reset = false;
+
+        let dock_sel = sel!(applicationDockMenu:);
+        if !class.responds_to(dock_sel) {
+            let target = new_target();
+            TARGET.store(Retained::as_ptr(&target).cast_mut(), Ordering::Relaxed);
+            std::mem::forget(target);
+            // SAFETY: the function matches the selector's signature (self, _cmd, the app;
+            // returns an object), which the type encoding "@@:@" describes. Adding a
+            // method to a registered class is allowed; it has none of this name yet.
+            let added = unsafe {
+                let imp: Imp = std::mem::transmute::<unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject) -> *mut AnyObject, Imp>(dock_menu);
+                objc2::ffi::class_addMethod(std::ptr::from_ref(class).cast_mut(), dock_sel, imp, c"@@:@".as_ptr()).as_bool()
+            };
+            if added {
+                needs_reset = true;
+                log::info!("dock: menu installed");
+            } else {
+                log::warn!("dock: couldn't add the Dock menu to {}", class.name().to_string_lossy());
+            }
         }
-        let target = new_target();
-        TARGET.store(Retained::as_ptr(&target).cast_mut(), Ordering::Relaxed);
-        std::mem::forget(target);
-        // SAFETY: the function matches the selector's signature (self, _cmd, the app;
-        // returns an object), which the type encoding "@@:@" describes. Adding a
-        // method to a registered class is allowed; it has none of this name yet.
-        let added = unsafe {
-            let imp: Imp = std::mem::transmute::<unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject) -> *mut AnyObject, Imp>(dock_menu);
-            objc2::ffi::class_addMethod(std::ptr::from_ref(class).cast_mut(), sel, imp, c"@@:@".as_ptr()).as_bool()
-        };
-        if !added {
-            log::warn!("dock: couldn't add the Dock menu to {}", class.name().to_string_lossy());
-            return;
+
+        let reopen_sel = sel!(applicationShouldHandleReopen:hasVisibleWindows:);
+        if !class.responds_to(reopen_sel) {
+            // SAFETY: matching - (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)flag
+            let added = unsafe {
+                let imp: Imp = std::mem::transmute::<unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject, bool) -> bool, Imp>(reopen);
+                objc2::ffi::class_addMethod(std::ptr::from_ref(class).cast_mut(), reopen_sel, imp, c"c@:@c".as_ptr()).as_bool()
+            };
+            if added {
+                needs_reset = true;
+                log::info!("dock: reopen handler installed");
+            } else {
+                log::warn!("dock: couldn't add reopen handler to {}", class.name().to_string_lossy());
+            }
         }
+
         // NSApplication notes which optional methods its delegate has when the delegate
         // is set: set it again so it sees the new one. (Through nil, in case setting
         // the same object is skipped.) The event loop keeps its own strong reference.
         // SAFETY: setDelegate: takes an object conforming to NSApplicationDelegate, or nil.
-        unsafe {
-            let none: *const AnyObject = std::ptr::null();
-            let _: () = msg_send![&*app, setDelegate: none];
-            let _: () = msg_send![&*app, setDelegate: &*delegate];
+        if needs_reset {
+            unsafe {
+                let none: *const AnyObject = std::ptr::null();
+                let _: () = msg_send![&*app, setDelegate: none];
+                let _: () = msg_send![&*app, setDelegate: &*delegate];
+            }
         }
-        log::info!("dock: menu installed");
     }
 }
 

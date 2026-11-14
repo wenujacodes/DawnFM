@@ -1184,10 +1184,10 @@ impl eframe::App for App {
         }
         self.mini.tick(ctx, now);
         self.tray_window(ctx);
-        self.window_hidden = self.tray.is_some() || ctx.input(|i| i.viewport().minimized == Some(true));
+        self.window_hidden = self.tray.is_some() || ctx.input(|i| i.viewport().minimized == Some(true) || i.viewport().visible() == Some(false));
         self.sync_discord();
         self.sync_lastfm();
-        self.sync_dock();
+        self.sync_dock(ctx);
         self.sync_menubar(ctx);
         self.sync_notify(ctx);
         self.sync_server_queue(ctx, now);
@@ -1219,9 +1219,8 @@ impl eframe::App for App {
             if playing || self.buffering {
                 // Coming back from minimized or from under another window wakes nothing
                 // by itself (eframe only notes it), so the first frame is this tick:
-                // short, or the window sits on its old frame for up to a second. The
-                // tray is left by a click that draws at once, so it keeps the slow one.
-                ctx.request_repaint_after(if self.tray.is_some() { Duration::from_secs(1) } else { Duration::from_millis(150) });
+                // short, or the window sits on its old frame for up to a second.
+                ctx.request_repaint_after(Duration::from_millis(200));
             }
         } else if self.np_open && playing && !self.mini.busy() {
             ctx.request_repaint_after(Duration::from_millis(33));

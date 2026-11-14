@@ -263,9 +263,10 @@ impl App {
                 i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::M, pressed: true, repeat: false, modifiers, .. } if modifiers.command && modifiers.alt)),
                 cmd(egui::Key::L),
                 i.modifiers.command && i.key_pressed(egui::Key::Comma),
+                cmd(egui::Key::W),
             )
         });
-        let (space, back, fwd, next, prev, lyr, queue, full, esc, vol_up, vol_down, mini, lyr_panel, settings) = i;
+        let (space, back, fwd, next, prev, lyr, queue, full, esc, vol_up, vol_down, mini, lyr_panel, settings, close_w) = i;
         if mini {
             self.actions.push(Action::Mini(!self.mini.target()));
         }
@@ -312,6 +313,20 @@ impl App {
                 self.set_fullscreen(ctx, false);
             } else {
                 self.np_open = false;
+            }
+        }
+        if close_w {
+            #[cfg(target_os = "macos")]
+            {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                self.window_hidden = true;
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                if self.close_to_tray {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                    self.window_hidden = true;
+                }
             }
         }
     if vol_up || vol_down {

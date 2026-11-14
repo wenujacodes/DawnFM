@@ -131,13 +131,14 @@ impl App {
         }
     }
 
-    pub(super) fn sync_dock(&mut self) {
+    pub(super) fn sync_dock(&mut self, ctx: &egui::Context) {
         crate::dock::set_state(self.playing_track().map(|t| t.title.as_str()), self.playing() || self.buffering);
         for cmd in crate::dock::take() {
             match cmd {
                 crate::dock::Cmd::Toggle => self.toggle(),
                 crate::dock::Cmd::Next => self.next(),
                 crate::dock::Cmd::Prev => self.prev(),
+                crate::dock::Cmd::Show => self.show_window(ctx),
             }
         }
     }
@@ -219,42 +220,50 @@ impl App {
 
     /// Close the app for real, even with "Close to tray" on.
     pub(super) fn quit(&mut self, ctx: &egui::Context) {
+        crate::dock::stop_activity();
         self.exiting = true;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
-    /// "Close to tray": × hides the window behind a tray icon; the icon brings it
-    /// back or quits. eframe keeps running `logic` while the window is hidden.
+    /// On macOS, clicking the window close button hides the window to the background
+    /// like native apps (e.g. Apple Music / Spotify), keeping playback alive.
+    /// On other platforms, it minimizes to tray if "Close to tray" is enabled.
     pub(super) fn tray_window(&mut self, ctx: &egui::Context) {
-        if ctx.input(|i| i.viewport().close_requested()) && self.close_to_tray && !self.exiting {
-            let c = ctx.clone();
-            match crate::tray::Tray::new(move || c.request_repaint()) {
-                Ok(t) => {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-                    self.tray = Some(t);
+        let close_requested = ctx.input(|i| i.viewport().close_requested());
+        if close_requested && !self.exiting {
+            #[cfg(target_os = "macos")]
+            let hide_window = true;
+            #[cfg(not(target_os = "macos"))]
+            let hide_window = self.close_to_tray;
+
+            if hide_window {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                self.window_hidden = true;
+                if self.close_to_tray && self.tray.is_none() {
+                    let c = ctx.clone();
+                    match crate::tray::Tray::new(move || c.request_repaint()) {
+                        Ok(t) => self.tray = Some(t),
+                        Err(e) => log::warn!("tray icon unavailable: {e:#}"),
+                    }
                 }
-                // Without an icon there'd be no way back: just close.
-                Err(e) => log::warn!("tray icon unavailable: {e:#}"),
             }
         }
-        if self.tray.is_none() {
-            return;
-        }
-        // The first click decides; the icon goes away with it.
-        match crate::tray::take().into_iter().next() {
-            Some(crate::tray::Cmd::Show) => self.show_window(ctx),
-            Some(crate::tray::Cmd::Quit) => {
-                self.tray = None;
-                self.quit(ctx);
+        for cmd in crate::tray::take() {
+            match cmd {
+                crate::tray::Cmd::Show => self.show_window(ctx),
+                crate::tray::Cmd::Quit => {
+                    self.tray = None;
+                    self.quit(ctx);
+                }
             }
-            None => {}
         }
     }
 
     /// Bring the window back (from the tray, or minimized) and to the front.
     pub(super) fn show_window(&mut self, ctx: &egui::Context) {
         self.tray = None;
+        self.window_hidden = false;
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
