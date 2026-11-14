@@ -76,7 +76,7 @@ pub fn sized(url: &str, px: u32) -> String {
         // often portrait) keeps that, or it comes back its own shape and is drawn
         // stretched into the square.
         let crop = square_crop(&url[i + 1..]);
-        return format!("{}=w{px}-h{px}{}-l90-rj", &url[..i], if crop { "-p" } else { "" });
+        return format!("{}=w{px}-h{px}{}-l80-rw", &url[..i], if crop { "-p" } else { "" });
     }
     url.to_owned()
 }
@@ -98,11 +98,11 @@ mod sized_tests {
     #[test]
     fn square_crops_stay_cropped() {
         let base = "https://yt3.ggpht.com/abc";
-        assert_eq!(sized(&format!("{base}=w120-h120-p-l90-rj"), 544), format!("{base}=w544-h544-p-l90-rj"));
-        assert_eq!(sized(&format!("{base}=s88-c-k-c0x00ffffff-no-rj"), 544), format!("{base}=w544-h544-p-l90-rj"));
+        assert_eq!(sized(&format!("{base}=w120-h120-p-l90-rj"), 544), format!("{base}=w544-h544-p-l80-rw"));
+        assert_eq!(sized(&format!("{base}=s88-c-k-c0x00ffffff-no-rj"), 544), format!("{base}=w544-h544-p-l80-rw"));
         // Album art doesn't ask, and a wide banner isn't squared.
-        assert_eq!(sized("https://lh3.googleusercontent.com/x=w120-h120-l90-rj", 544), "https://lh3.googleusercontent.com/x=w544-h544-l90-rj");
-        assert_eq!(sized("https://lh3.googleusercontent.com/x=w1440-h600-p-l90-rj", 544), "https://lh3.googleusercontent.com/x=w544-h544-l90-rj");
+        assert_eq!(sized("https://lh3.googleusercontent.com/x=w120-h120-l90-rj", 544), "https://lh3.googleusercontent.com/x=w544-h544-l80-rw");
+        assert_eq!(sized("https://lh3.googleusercontent.com/x=w1440-h600-p-l90-rj", 544), "https://lh3.googleusercontent.com/x=w544-h544-l80-rw");
     }
 }
 
