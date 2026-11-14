@@ -98,22 +98,27 @@ impl BytesLoader for HttpImages {
             Some(Entry::Failed(e, at)) if at.elapsed() < RETRY_AFTER => return Err(LoadError::Loading(e.clone())),
             Some(Entry::Failed(..)) | None => {}
         }
+        let file = disk_path(&self.dir, uri);
+        if let Ok(bytes) = std::fs::read(&file) {
+            let shared: Arc<[u8]> = Arc::from(bytes);
+            cache.insert(uri.to_owned(), Entry::Ready(shared.clone(), None));
+            let file_clone = file.clone();
+            self.backend.spawn(async move {
+                let _ = std::fs::File::options().write(true).open(&file_clone).and_then(|f| f.set_modified(std::time::SystemTime::now()));
+            });
+            return Ok(BytesPoll::Ready {
+                size: None,
+                bytes: Bytes::Shared(shared),
+                mime: None,
+            });
+        }
+
         cache.insert(uri.to_owned(), Entry::Pending);
         drop(cache);
 
         let (http, cache, uri, backend) =
             (self.backend.http(), self.cache.clone(), uri.to_owned(), self.backend.clone());
-        let file = disk_path(&self.dir, &uri);
         self.backend.spawn(async move {
-            if let Ok(bytes) = std::fs::read(&file) {
-                // Touch it, so trimming drops pictures that aren't used any more.
-                let _ = std::fs::File::options().write(true).open(&file).and_then(|f| f.set_modified(std::time::SystemTime::now()));
-                if let Some(slot) = cache.lock_unpoisoned().get_mut(&uri) {
-                    *slot = Entry::Ready(Arc::from(bytes), None);
-                }
-                backend.wake();
-                return;
-            }
             let res = async {
                 let resp = http.get(&uri).send().await?.error_for_status()?;
                 let mime = resp
