@@ -1029,17 +1029,17 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, frosted: bool) {
         }
     }
     if dock && total > 0.0 {
-        let g = widgets::galley(ui, &fmt_time(pos as u32), theme::semibold(11.5), theme::text_dim(), 80.0);
+        let g = widgets::galley(ui, &fmt_time(pos as u32), theme::tabular(11.5), theme::text_dim(), 80.0);
         ui.painter().galley(pos2(sx0 - 10.0 - g.size().x, sy - g.size().y / 2.0), g, theme::text_dim());
         let left = fmt_time((total - pos).max(0.0) as u32);
-        let g = widgets::galley(ui, &format!("-{left}"), theme::semibold(11.5), theme::text_dim(), 80.0);
+        let g = widgets::galley(ui, &format!("-{left}"), theme::tabular(11.5), theme::text_dim(), 80.0);
         ui.painter().galley(pos2(sx1 + 10.0, sy - g.size().y / 2.0), g, theme::text_dim());
     } else if focus > 0.0 && total > 0.0 {
         let col = theme::with_alpha(theme::text(), focus);
-        let g = widgets::galley(ui, &fmt_time(pos as u32), theme::semibold(11.5), theme::text(), 80.0);
+        let g = widgets::galley(ui, &fmt_time(pos as u32), theme::tabular(11.5), theme::text(), 80.0);
         ui.painter().galley(pos2(text_l, cy + 2.0), g, col);
         let left = fmt_time((total - pos).max(0.0) as u32);
-        let g = widgets::galley(ui, &format!("-{left}"), theme::semibold(11.5), theme::text(), 80.0);
+        let g = widgets::galley(ui, &format!("-{left}"), theme::tabular(11.5), theme::text(), 80.0);
         ui.painter().galley(pos2(text_r - g.size().x, cy + 2.0), g, col);
     }
 

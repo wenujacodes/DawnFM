@@ -730,7 +730,7 @@ fn seek_line(app: &mut App, ui: &mut Ui, r: Rect, track: Option<&crate::model::T
         && let Some(p) = resp.hover_pos().or(resp.interact_pointer_pos())
     {
         let txt = format!("{} / {}", fmt_time(at(p) as u32), fmt_time(total as u32));
-        let g = widgets::galley(ui, &txt, theme::semibold(11.5), Color32::WHITE, 120.0);
+        let g = widgets::galley(ui, &txt, theme::tabular(11.5), Color32::WHITE, 120.0);
         let half = g.size().x / 2.0 + 6.0;
         let x = p.x.clamp(r.left() + half + 2.0, r.right() - half - 2.0);
         let bg = Rect::from_center_size(pos2(x, line.top() - 13.0), g.size() + vec2(12.0, 5.0));

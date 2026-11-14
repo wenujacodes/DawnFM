@@ -508,7 +508,7 @@ fn cover_xfade(ui: &Ui, site: egui::Id, rect: Rect, radius: f32, url: &str, uv: 
 
 /// Album/playlist/artist/song card with hover zoom, scrim and a play button.
 pub fn card(ui: &mut Ui, c: &Card, width: f32, liked: bool, acts: &mut Vec<Action>) {
-    let height = width + 58.0;
+    let height = width + 52.0;
     let (rect, resp) = ui.allocate_exact_size(vec2(width, height), Sense::click());
     if !ui.is_rect_visible(rect) {
         return;
@@ -518,10 +518,10 @@ pub fn card(ui: &mut Ui, c: &Card, width: f32, liked: bool, acts: &mut Vec<Actio
     // card must stay "hovered" while the pointer is on it or the button would vanish.
     let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.contains_pointer(), 0.22);
     let img = Rect::from_min_size(rect.min, Vec2::splat(width));
-    let radius = if c.round { width / 2.0 } else { theme::card_radius().min(width / 2.0) };
-    paint_cover(ui, img, &c.thumbs, radius, 1.0 + 0.06 * h * theme::hover_k());
+    let radius = if c.round { width / 2.0 } else { 7.0 };
+    paint_cover(ui, img, &c.thumbs, radius, 1.0 + 0.05 * h * theme::hover_k());
     if h > 0.0 && !c.round {
-        ui.painter().rect_filled(img, radius, theme::shade(0.28 * h));
+        ui.painter().rect_filled(img, radius, theme::shade(0.25 * h));
     }
     // Play button rises into the corner on hover; on the playing item it stays up
     // and shows pause.
@@ -529,22 +529,22 @@ pub fn card(ui: &mut Ui, c: &Card, width: f32, liked: bool, acts: &mut Vec<Actio
     let h = if active.is_some() { 1.0 } else { h };
     let mut play_hit = false;
     if h > 0.01 {
-        let center = img.right_bottom() + vec2(-30.0, -30.0 + 8.0 * (1.0 - h));
-        let prect = Rect::from_center_size(center, Vec2::splat(44.0));
+        let center = img.right_bottom() + vec2(-28.0, -28.0 + 6.0 * (1.0 - h));
+        let prect = Rect::from_center_size(center, Vec2::splat(40.0));
         let p = ui.interact(prect, resp.id.with("play"), Sense::click());
         let playing = active == Some(true);
         let p = named(p, &format!("{} {}", if playing { "Pause" } else { "Play" }, c.title)).on_hover_cursor(egui::CursorIcon::PointingHand);
         let ph = theme::anim_bool(ui.ctx(), p.id.with("h"), p.hovered(), 0.12);
-        ui.painter().circle_filled(center, 22.0 + 2.0 * ph, theme::shade(0.62 * h));
-        play_pause_glyph(ui, center, 10.0, theme::with_alpha(Color32::WHITE, h), playing);
+        ui.painter().circle_filled(center, 20.0 + 2.0 * ph, theme::shade(0.65 * h));
+        play_pause_glyph(ui, center, 9.0, theme::with_alpha(Color32::WHITE, h), playing);
         play_hit = p.clicked();
     }
     let tcolor = theme::text();
-    let title = galley_wrapped(ui, &c.title, theme::semibold(14.5), tcolor, width, 2);
+    let title = galley_wrapped(ui, &c.title, theme::semibold(13.0), tcolor, width, 2);
     let title_h = title.size().y;
-    ui.painter().galley(pos2(rect.left(), img.bottom() + 10.0), title, tcolor);
-    let sub_y = img.bottom() + 14.0 + title_h;
-    linked_text(ui, pos2(rect.left(), sub_y), &card_subtitle(&c.subtitle), &c.links, theme::regular(13.0), theme::text_dim(), width, acts);
+    ui.painter().galley(pos2(rect.left(), img.bottom() + 7.0), title, tcolor);
+    let sub_y = img.bottom() + 9.0 + title_h;
+    linked_text(ui, pos2(rect.left(), sub_y), &card_subtitle(&c.subtitle), &c.links, theme::regular(12.0), theme::text_dim(), width, acts);
     // Right-click anywhere on the tile opens its menu.
     egui::Popup::context_menu(&resp).show(|ui| card_menu_contents(ui, c, liked, acts));
 
@@ -857,7 +857,7 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
         } else if h > 0.5 {
             play_triangle(ui, slot.center(), 6.0, theme::text());
         } else {
-            ui.painter().text(slot.center(), Align2::CENTER_CENTER, n.to_string(), theme::regular(14.0), theme::text_dim());
+            ui.painter().text(slot.center(), Align2::CENTER_CENTER, n.to_string(), theme::tabular(13.0), theme::text_dim());
         }
         x += 36.0;
     } else {
@@ -895,7 +895,7 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
             text_at(ui, pos2(album_x, cy - 8.0), &album.name, theme::regular(13.5), theme::text_dim(), right - dur_w - album_x - 10.0);
         }
         if let Some(d) = t.duration {
-            ui.painter().text(pos2(right, cy), Align2::RIGHT_CENTER, super::fmt_time(d), theme::regular(13.0), theme::text_dim());
+            ui.painter().text(pos2(right, cy), Align2::RIGHT_CENTER, super::fmt_time(d), theme::tabular(12.5), theme::text_dim());
         }
         egui::Popup::context_menu(&resp).show(|ui| song_menu(ui, t, o.liked, o.remove, acts));
         return resp;
@@ -945,7 +945,7 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
         }
     }
     if let Some(d) = t.duration {
-        ui.painter().text(pos2(right, cy), Align2::RIGHT_CENTER, super::fmt_time(d), theme::regular(13.0), theme::text_dim());
+        ui.painter().text(pos2(right, cy), Align2::RIGHT_CENTER, super::fmt_time(d), theme::tabular(12.5), theme::text_dim());
     }
     // Right-click anywhere on the row opens its menu.
     egui::Popup::context_menu(&resp).show(|ui| song_menu(ui, t, o.liked, o.remove, acts));
