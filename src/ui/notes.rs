@@ -12,14 +12,69 @@ pub enum Block {
     Heading(String),
     Para(String),
     Bullet(String),
+    Image(String),
+}
+
+/// Find the first HTML `<img ... src="..." ...>` tag or Markdown `![alt](url)` in `s`.
+/// Returns `(start_index, end_index, image_url)`.
+fn find_image_in_str(s: &str) -> Option<(usize, usize, String)> {
+    let lower = s.to_lowercase();
+    let img_tag = lower.find("<img").and_then(|start| {
+        let after_img = &s[start + 4..];
+        let end_tag = after_img.find('>')?;
+        let tag_content = &after_img[..end_tag];
+        let tag_lower = tag_content.to_lowercase();
+        let src_pos = tag_lower.find("src=")?;
+        let after_src = tag_content[src_pos + 4..].trim_start();
+        let url = if after_src.starts_with('"') || after_src.starts_with('\'') {
+            let quote = after_src.chars().next().unwrap();
+            let rest = &after_src[1..];
+            let end_quote = rest.find(quote)?;
+            rest[..end_quote].to_owned()
+        } else {
+            let end = after_src.find(|c: char| c.is_whitespace() || c == '/' || c == '>').unwrap_or(after_src.len());
+            after_src[..end].to_owned()
+        };
+        Some((start, start + 4 + end_tag + 1, url))
+    });
+
+    let md_img = s.find("![").and_then(|start| {
+        let after_bang = &s[start + 2..];
+        let close_bracket = after_bang.find("](")?;
+        let after_paren = &after_bang[close_bracket + 2..];
+        let close_paren = after_paren.find(')')?;
+        let url_part = after_paren[..close_paren].split_whitespace().next().unwrap_or("");
+        if url_part.is_empty() {
+            return None;
+        }
+        Some((start, start + 2 + close_bracket + 2 + close_paren + 1, url_part.to_owned()))
+    });
+
+    match (img_tag, md_img) {
+        (Some(a), Some(b)) => if a.0 <= b.0 { Some(a) } else { Some(b) },
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
 }
 
 pub fn parse(md: &str) -> Vec<Block> {
     let mut out = Vec::new();
     let mut para = String::new();
     let flush = |para: &mut String, out: &mut Vec<Block>| {
-        if !para.trim().is_empty() {
-            out.push(Block::Para(para.trim().to_owned()));
+        let mut text = para.trim().to_owned();
+        while let Some((start, end, url)) = find_image_in_str(&text) {
+            let before = text[..start].trim();
+            if !before.is_empty() {
+                out.push(Block::Para(before.to_owned()));
+            }
+            if !url.trim().is_empty() {
+                out.push(Block::Image(url.trim().to_owned()));
+            }
+            text = text[end..].trim().to_owned();
+        }
+        if !text.is_empty() {
+            out.push(Block::Para(text));
         }
         para.clear();
     };
@@ -121,6 +176,21 @@ pub fn show(ui: &mut Ui, blocks: &[Block], size: f32) {
                 ui.painter().circle_filled(dot, 2.2, body);
                 ui.painter().galley(rect.min + vec2(18.0, 0.0), g, body);
                 ui.add_space(4.0);
+            }
+            Block::Image(url) => {
+                ui.add_space(6.0);
+                let img = egui::Image::new(url.as_str())
+                    .max_width(width)
+                    .corner_radius(egui::CornerRadius::same(10))
+                    .maintain_aspect_ratio(true);
+                let resp = ui.add(img);
+                if resp.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                if resp.clicked() {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+                }
+                ui.add_space(8.0);
             }
         }
     }
@@ -329,6 +399,21 @@ mod tests {
         assert!(matches!(&b[4], Block::Bullet(t) if t == "Icons are `centred` in their buttons."));
         assert_eq!(spans("Pick **files** now"), vec![("Pick ".into(), false), ("files".into(), true), (" now".into(), false)]);
         assert_eq!(plain("See [the notes](https://example.com)."), "See the notes.");
+    }
+
+    #[test]
+    fn parses_images_in_markdown() {
+        let md = r#"
+<img width="1710" height="1075" alt="Screenshot" src="https://github.com/user-attachments/assets/81143426-7d74-4d1b-8068-bdcf69d72065" />
+
+Here is another image: ![test alt](https://example.com/art.png) with text after.
+"#;
+        let b = parse(md);
+        assert_eq!(b.len(), 4);
+        assert!(matches!(&b[0], Block::Image(url) if url == "https://github.com/user-attachments/assets/81143426-7d74-4d1b-8068-bdcf69d72065"));
+        assert!(matches!(&b[1], Block::Para(t) if t == "Here is another image:"));
+        assert!(matches!(&b[2], Block::Image(url) if url == "https://example.com/art.png"));
+        assert!(matches!(&b[3], Block::Para(t) if t == "with text after."));
     }
 
     #[test]
