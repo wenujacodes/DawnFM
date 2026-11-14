@@ -544,6 +544,9 @@ pub struct App {
     dialog: Option<Dialog>,
     share_pending: Option<String>,
     smoke: Option<String>,
+    mouse_last_pos: Option<egui::Pos2>,
+    mouse_last_moved: f64,
+    mouse_hidden: bool,
 }
 
 /// Longest crossfade offered, in seconds.
@@ -784,6 +787,9 @@ impl App {
             dialog: None,
             share_pending: None,
             smoke: None,
+            mouse_last_pos: None,
+            mouse_last_moved: 0.0,
+            mouse_hidden: false,
         };
         app.request_liked(false);
         // Dev hooks: YTM_SMOKE="query" searches and plays the first song ("id:<videoId>[,<videoId>…]"
@@ -1124,6 +1130,38 @@ impl eframe::App for App {
         theme::watch_system_appearance(ctx);
         self.lyric_view.release_hidden(ctx.cumulative_pass_nr());
         let now = ctx.input(|i| i.time);
+
+        // Mouse visibility in full-screen player (album lyrics): hides after 5 seconds of inactivity.
+        let pos = ctx.input(|i| i.pointer.latest_pos());
+        let mouse_moved = ctx.input(|i| {
+            i.pointer.any_pressed() || i.pointer.any_down() || !i.events.is_empty()
+        }) || (pos.is_some() && pos != self.mouse_last_pos);
+
+        if mouse_moved {
+            self.mouse_last_pos = pos;
+            self.mouse_last_moved = now;
+            if self.mouse_hidden {
+                self.mouse_hidden = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(true));
+            }
+        }
+
+        let in_fullscreen_lyrics = self.fullscreen && self.np_open && (self.np_tab == NpTab::Lyrics || self.np_tab == NpTab::Art);
+        if in_fullscreen_lyrics {
+            if now - self.mouse_last_moved >= 5.0 {
+                if !self.mouse_hidden {
+                    self.mouse_hidden = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(false));
+                }
+                ctx.set_cursor_icon(egui::CursorIcon::None);
+            } else {
+                let remaining = 5.0 - (now - self.mouse_last_moved);
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64(remaining.max(0.1)));
+            }
+        } else if self.mouse_hidden {
+            self.mouse_hidden = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(true));
+        }
         self.sync_look();
         self.pump(now);
         self.skip_segments(ctx, now);
