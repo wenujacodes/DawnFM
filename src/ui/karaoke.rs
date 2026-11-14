@@ -844,7 +844,9 @@ pub struct Out {
 
 impl View {
     pub fn reset(&mut self) {
-        *self = Self { glow: std::mem::take(&mut self.glow), ..Default::default() };
+        let mut glow = std::mem::take(&mut self.glow);
+        glow.reset();
+        *self = Self { glow, ..Default::default() };
     }
 
     /// Called every frame: once the view isn't drawn (another tab or page), its glows,
@@ -1030,6 +1032,36 @@ impl View {
         let origin_y = rect.top() - self.scroll_top + layout.pad_top;
         let x0 = rect.left() + cfg.pad.0;
         let line_w = rect.width() - cfg.pad.0 - cfg.pad.1;
+
+        // Prime visible lines into egui's font atlas before capturing atlas size,
+        // so no layout call during painting can resize the font atlas mid-pass.
+        ctx.fonts_mut(|fonts| {
+            for b in &layout.blocks {
+                let top = origin_y + b.top;
+                if top > rect.bottom() + 40.0 || top + b.height < rect.top() - 40.0 {
+                    continue;
+                }
+                if let Some((text, font)) = &b.credits {
+                    fonts.layout(text.clone(), font.clone(), Color32::WHITE, (line_w - cfg.size * 0.5).max(1.0));
+                }
+                for w in &b.words {
+                    fonts.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE);
+                }
+                for d in &b.decos {
+                    match &d.body {
+                        DecoBody::Timed { words, .. } => {
+                            for w in words {
+                                fonts.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE);
+                            }
+                        }
+                        DecoBody::Text(text, font) => {
+                            fonts.layout(text.clone(), font.clone(), Color32::WHITE, (d.rect.width() + 1.0).max(1.0));
+                        }
+                    }
+                }
+            }
+        });
+
         let atlas = ctx.fonts(|fv| fv.font_image_size());
         let ppp = ctx.pixels_per_point();
         let mut seek = None;
@@ -1064,8 +1096,10 @@ impl View {
                 let a = theme::anim(&ctx, ("lyr-credits", f.key), a, 0.35);
                 let o = transform_origin(block_rect, b.align, content.x);
                 let g = ctx.fonts_mut(|fv| fv.layout(text.clone(), font.clone(), Color32::WHITE, line_w - cfg.size * 0.5));
+                let cur_atlas = ctx.fonts(|fv| fv.font_image_size());
+                let cur_atlas = [atlas[0].max(cur_atlas[0]), atlas[1].max(cur_atlas[1])];
                 let xf = Xf { origin: o, scale: cfg.scale, content };
-                paint_galley(&painter, &g, pos2(0.0, cfg.padding), &xf, theme::with_alpha(cfg.base, a), atlas);
+                paint_galley(&painter, &g, pos2(0.0, cfg.padding), &xf, theme::with_alpha(cfg.base, a), cur_atlas);
                 continue;
             }
             let li = b.line.unwrap();
@@ -1205,8 +1239,10 @@ impl View {
                         DecoBody::Text(text, font) => {
                             let wrap = d.rect.width() + 1.0;
                             let g = ctx.fonts_mut(|fv| fv.layout(text.clone(), font.clone(), Color32::WHITE, wrap));
+                            let cur_atlas = ctx.fonts(|fv| fv.font_image_size());
+                            let cur_atlas = [atlas[0].max(cur_atlas[0]), atlas[1].max(cur_atlas[1])];
                             let pad = if d.pill { vec2(cfg.rem() * 0.75 + 1.0, cfg.rem() * 0.25 + 1.0) } else { Vec2::ZERO };
-                            paint_galley(&painter, &g, d.rect.min + pad, &dxf, theme::with_alpha(cfg.base, text_alpha * a), atlas);
+                            paint_galley(&painter, &g, d.rect.min + pad, &dxf, theme::with_alpha(cfg.base, text_alpha * a), cur_atlas);
                         }
                     }
                 }
@@ -1289,6 +1325,30 @@ impl View {
         let want = last_centre.map_or(view_h, |c| c + view_h * (1.0 - cfg.target_ratio));
         let pad_bottom = (want - content).max(view_h - content).max(view_h * (1.0 - cfg.target_ratio) - trailing).max(0.0);
         let richsync = lyrics.sync == Sync::Word;
+        // Prime font cache for all words in the song so the egui font atlas does not grow mid-paint.
+        ui.ctx().fonts_mut(|fonts| {
+            for b in &blocks {
+                if let Some((text, font)) = &b.credits {
+                    fonts.layout(text.clone(), font.clone(), Color32::WHITE, (width - cfg.size * 0.5).max(1.0));
+                }
+                for w in &b.words {
+                    fonts.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE);
+                }
+                for d in &b.decos {
+                    match &d.body {
+                        DecoBody::Timed { words, .. } => {
+                            for w in words {
+                                fonts.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE);
+                            }
+                        }
+                        DecoBody::Text(text, font) => {
+                            fonts.layout(text.clone(), font.clone(), Color32::WHITE, (d.rect.width() + 1.0).max(1.0));
+                        }
+                    }
+                }
+            }
+        });
+
         let same_song = self.layout.as_ref().is_some_and(|l| l.blocks.len() == blocks.len() && self.states.len() == blocks.len() && l.richsync == richsync && same_lines(l, &blocks));
         if same_song {
             // Decorations arrived (or the window resized): lines slide to their new places.
@@ -1302,7 +1362,8 @@ impl View {
                 }
             }
         } else {
-            let glow = std::mem::take(&mut self.glow);
+            let mut glow = std::mem::take(&mut self.glow);
+            glow.reset();
             *self = Self { glow, ..Default::default() };
             self.states = vec![LineState::default(); blocks.len()];
             self.shifts = vec![Vec::new(); blocks.len()];
@@ -1648,7 +1709,12 @@ struct GlyphQuad {
 /// and scaled with the line: a second size would put a second copy of every glyph in
 /// the shared font atlas, which only ever grows.
 fn word_glyphs(ctx: &egui::Context, w: &Word, lit: &LitState, cfg: &Cfg, wob: Option<(f32, f32, f32)>, atlas: [usize; 2]) -> Vec<GlyphQuad> {
-    let g = ctx.fonts_mut(|fv| fv.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE));
+    let (g, cur_atlas) = ctx.fonts_mut(|fv| {
+        let g = fv.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE);
+        let size = fv.font_image_size();
+        (g, size)
+    });
+    let atlas = [atlas[0].max(cur_atlas[0]), atlas[1].max(cur_atlas[1])];
     let n: usize = g.rows.iter().map(|r| r.row.glyphs.len()).sum();
     let waves = if w.letters && lit.live && lit.exit.is_none() { Some(letter_waves(n, w.dur.max(0.0), cfg.wave_duration)) } else { None };
     let e = lit.t - w.start;
@@ -1877,7 +1943,18 @@ struct Glow {
 }
 
 impl Glow {
+    fn reset(&mut self) {
+        self.atlas = None;
+        let mut gone: Vec<Slot> = self.textures.drain().map(|(_, (s, _))| s).collect();
+        gone.extend(self.lines.drain().map(|(_, (s, ..))| s));
+        for s in gone {
+            self.recycle(s);
+        }
+    }
+
     fn atlas(&mut self, ctx: &egui::Context, size: [usize; 2], need: &[Rect]) -> Arc<Coverage> {
+        let cur_size = ctx.fonts(|f| f.font_image_size());
+        let size = [size[0].max(cur_size[0]), size[1].max(cur_size[1])];
         let stale = match &self.atlas {
             None => true,
             Some(a) => a.size != size || need.iter().any(|uv| glyph_blank(a, *uv)),
@@ -1944,6 +2021,8 @@ impl Glow {
     fn finish(&mut self, ctx: &egui::Context, painter: &egui::Painter, jobs: Vec<GlowJob>, atlas_size: [usize; 2], ppp: f32) {
         let now = ctx.input(|i| i.time);
         if !jobs.is_empty() {
+            let cur_size = ctx.fonts(|f| f.font_image_size());
+            let atlas_size = [atlas_size[0].max(cur_size[0]), atlas_size[1].max(cur_size[1])];
             let uvs: Vec<Rect> = jobs.iter().flat_map(|j| j.quads.iter().map(|q| q.1)).collect();
             let atlas = self.atlas(ctx, atlas_size, &uvs);
             for j in jobs {
@@ -1995,6 +2074,15 @@ impl Glow {
             *used = now;
             return Some((s.tex.id(), *rect, s.uv()));
         }
+        let word_galleys: Vec<_> = words
+            .iter()
+            .map(|(w, weight)| {
+                let g = ctx.fonts_mut(|fv| fv.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE));
+                (g, w.pos, *weight)
+            })
+            .collect();
+        let cur_atlas_size = ctx.fonts(|fv| fv.font_image_size());
+        let atlas_size = [atlas_size[0].max(cur_atlas_size[0]), atlas_size[1].max(cur_atlas_size[1])];
         let uv_of = |min: [u16; 2], max: [u16; 2]| {
             Rect::from_min_max(
                 pos2(min[0] as f32 / atlas_size[0] as f32, min[1] as f32 / atlas_size[1] as f32),
@@ -2014,9 +2102,8 @@ impl Glow {
                 }
             }
         };
-        for (w, weight) in words {
-            let g = ctx.fonts_mut(|fv| fv.layout_no_wrap(w.text.clone(), w.font.clone(), Color32::WHITE));
-            push_galley(&g, w.pos, *weight, &mut quads);
+        for (g, pos, weight) in &word_galleys {
+            push_galley(g, *pos, *weight, &mut quads);
         }
         for (g, at, weight) in texts {
             push_galley(g, *at, *weight, &mut quads);
