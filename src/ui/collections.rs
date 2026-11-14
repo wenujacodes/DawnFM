@@ -86,6 +86,19 @@ impl App {
     /// An album or playlist (or a playlist's first page) came in. Only the load under way
     /// counts: one from before a sign-in change or a deletion is dropped.
     pub(super) fn collection_in(&mut self, load: u64, c: Collection, more: bool) {
+        let mut prefetch_urls = Vec::new();
+        if let Some(t) = crate::model::pick_thumb(&c.thumbs, 544) {
+            prefetch_urls.push(crate::model::sized(&t.url, 544));
+        }
+        for track in c.tracks.iter().take(12) {
+            if let Some(t) = crate::model::pick_thumb(&track.thumbs, 120) {
+                prefetch_urls.push(crate::model::sized(&t.url, 120));
+            }
+        }
+        if !prefetch_urls.is_empty() {
+            crate::images::prefetch_thumbs(&self.backend, prefetch_urls);
+        }
+
         let id = c.id.clone();
         let keep = self.keep_lists();
         let keep: Vec<&str> = keep.iter().map(String::as_str).collect();

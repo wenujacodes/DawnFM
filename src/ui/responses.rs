@@ -198,6 +198,20 @@ impl App {
                 }
             }
             Resp::Explore(e) => {
+                let mut prefetch_urls = Vec::new();
+                for card in e.new_albums.iter().chain(&e.charts).take(8) {
+                    if let Some(t) = crate::model::pick_thumb(&card.thumbs, 360) {
+                        prefetch_urls.push(crate::model::sized(&t.url, 544));
+                    }
+                }
+                for track in e.top.iter().take(8) {
+                    if let Some(t) = crate::model::pick_thumb(&track.thumbs, 120) {
+                        prefetch_urls.push(crate::model::sized(&t.url, 120));
+                    }
+                }
+                if !prefetch_urls.is_empty() {
+                    crate::images::prefetch_thumbs(&self.backend, prefetch_urls);
+                }
                 self.explore = Some(e);
                 self.loading = false;
             }
@@ -257,6 +271,20 @@ impl App {
                     if self.apple_waiting.insert(apple_key) {
                         self.backend.request(Req::AppleArtist { id, name });
                     }
+                }
+                let mut prefetch_urls = Vec::new();
+                for card in a.albums.iter().chain(&a.playlists).take(8) {
+                    if let Some(t) = crate::model::pick_thumb(&card.thumbs, 360) {
+                        prefetch_urls.push(crate::model::sized(&t.url, 544));
+                    }
+                }
+                for track in a.top.iter().take(8) {
+                    if let Some(t) = crate::model::pick_thumb(&track.thumbs, 120) {
+                        prefetch_urls.push(crate::model::sized(&t.url, 120));
+                    }
+                }
+                if !prefetch_urls.is_empty() {
+                    crate::images::prefetch_thumbs(&self.backend, prefetch_urls);
                 }
                 self.artist = Some(a);
             }
@@ -493,6 +521,29 @@ impl App {
 
     /// The home feed, replacing the one shown.
     fn on_home(&mut self, page: HomePage) {
+        let mut prefetch_urls = Vec::new();
+        for shelf in page.shelves.iter().take(3) {
+            match &shelf.kind {
+                crate::model::ShelfKind::Cards(cards) => {
+                    for card in cards.iter().take(4) {
+                        if let Some(t) = crate::model::pick_thumb(&card.thumbs, 360) {
+                            prefetch_urls.push(crate::model::sized(&t.url, 544));
+                        }
+                    }
+                }
+                crate::model::ShelfKind::Songs { tracks, .. } => {
+                    for track in tracks.iter().take(4) {
+                        if let Some(t) = crate::model::pick_thumb(&track.thumbs, 120) {
+                            prefetch_urls.push(crate::model::sized(&t.url, 120));
+                        }
+                    }
+                }
+            }
+        }
+        if !prefetch_urls.is_empty() {
+            crate::images::prefetch_thumbs(&self.backend, prefetch_urls);
+        }
+
         let mut chips = page.chips;
         // The feed marks the active mood itself; keep the bar when it doesn't send chips.
         if chips.is_empty() {

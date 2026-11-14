@@ -46,6 +46,31 @@ impl HttpImages {
     }
 }
 
+/// Prefetch thumbnail URLs in the background and cache them to disk so they are immediately available.
+pub fn prefetch_thumbs(backend: &Backend, urls: Vec<String>) {
+    if urls.is_empty() {
+        return;
+    }
+    let dir = backend.data_dir().join("thumbs");
+    let http = backend.http();
+    backend.spawn(async move {
+        for url in urls {
+            let file = disk_path(&dir, &url);
+            if file.exists() {
+                continue;
+            }
+            if let Ok(resp) = http.get(&url).send().await
+                && let Ok(resp) = resp.error_for_status()
+                && let Ok(bytes) = resp.bytes().await
+            {
+                if bytes.len() <= DISK_MAX_FILE {
+                    let _ = std::fs::write(&file, &bytes);
+                }
+            }
+        }
+    });
+}
+
 /// Where `uri` is kept on disk. Thumbnail URLs change when the picture does.
 fn disk_path(dir: &std::path::Path, uri: &str) -> std::path::PathBuf {
     use std::hash::{Hash, Hasher};
