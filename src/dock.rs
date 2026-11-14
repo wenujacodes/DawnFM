@@ -259,6 +259,37 @@ mod mac {
                 let _: () = msg_send![&*app, setDelegate: &*delegate];
             }
         }
+
+        // On macOS 26+ (Darwin kernel >= 26), activate the 26+ icon if bundled.
+        let is_macos_26 = {
+            let mut uts: libc::utsname = unsafe { std::mem::zeroed() };
+            if unsafe { libc::uname(&mut uts) } == 0 {
+                let rel = unsafe { std::ffi::CStr::from_ptr(uts.release.as_ptr()) }.to_str().unwrap_or_default();
+                let major: u32 = rel.split('.').next().and_then(|s| s.parse().ok()).unwrap_or(0);
+                major >= 26
+            } else {
+                false
+            }
+        };
+        if is_macos_26 {
+            unsafe {
+                let bundle: Retained<AnyObject> = msg_send![objc2::class!(NSBundle), mainBundle];
+                let name = NSString::from_str("dawnfm-26");
+                let ext = NSString::from_str("icns");
+                let path: Option<Retained<AnyObject>> = msg_send![&*bundle, pathForResource: &*name, ofType: &*ext];
+                if let Some(path) = path {
+                    let alloc: *mut AnyObject = msg_send![objc2::class!(NSImage), alloc];
+                    if !alloc.is_null() {
+                        let img: *mut AnyObject = msg_send![alloc, initWithContentsOfFile: &*path];
+                        if !img.is_null() {
+                            let _: () = msg_send![&*app, setApplicationIconImage: img];
+                            let _: () = msg_send![img, release];
+                            log::info!("dock: applied macOS 26+ icon");
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

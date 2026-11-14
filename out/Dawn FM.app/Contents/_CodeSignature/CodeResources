@@ -4,18 +4,29 @@
 <dict>
 	<key>files</key>
 	<dict>
-		<key>Resources/dawnfm.icns</key>
+		<key>Resources/dawnfm-26.icns</key>
 		<data>
 		PLaMO8ZbWvfIGskW5FE43KDtNpY=
+		</data>
+		<key>Resources/dawnfm.icns</key>
+		<data>
+		1bMiMCC2XJ9Iwq8XnkPKCxd0wnU=
 		</data>
 	</dict>
 	<key>files2</key>
 	<dict>
-		<key>Resources/dawnfm.icns</key>
+		<key>Resources/dawnfm-26.icns</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			L4h5QImMd1ByUdQsqupCdZ6N1BqSTxvwocrY4EBtfk0=
+			</data>
+		</dict>
+		<key>Resources/dawnfm.icns</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			KOkO4lZneslCjwNJOPWQjvLjRDr2j36wGaFwQXAC4u0=
 			</data>
 		</dict>
 	</dict>
