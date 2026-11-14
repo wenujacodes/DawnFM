@@ -587,12 +587,10 @@ pub(super) fn lyrics_drawer(app: &mut App, ui: &mut Ui, now: f64) {
         });
         return;
     }
-    let pages = theme::set_mode(ui.ctx(), false);
     ui.set_clip_rect(rect);
     if !lyrics_wait(app, ui, rect, now) {
         lyrics_panel(app, ui, rect, now, false);
     }
-    theme::set_mode(ui.ctx(), pages);
 }
 
 /// A song whose lyrics nobody asked for (restored, or picked up from another device)
@@ -742,7 +740,7 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
     let shown = theme::anim_bool(ui.ctx(), "lyr-resume", out.user_scrolling, 0.2);
     if shown > 0.0 {
         let font = theme::lyric_font(&style.font, crate::preset::Weight::Semibold, 17.5);
-        let g = widgets::galley(ui, "Resume Autoscroll", font, Color32::WHITE, rect.width() - 40.0);
+        let g = widgets::galley(ui, "Resume Autoscroll", font, theme::text(), rect.width() - 40.0);
         let size = g.size() + vec2(20.0, 10.0) + Vec2::splat(2.0);
         let em = 17.5;
         let y = rect.top() + 8.0 + egui::lerp(-3.0 * em..=0.5 * em, theme::ease_out(shown));
@@ -751,8 +749,8 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
         let resp = named(resp, "Resume Autoscroll").on_hover_cursor(egui::CursorIcon::PointingHand);
         let hover = theme::anim_bool(ui.ctx(), "lyr-resume-h", resp.hovered() && out.user_scrolling, 0.25);
         let p = ui.painter().with_clip_rect(rect.expand2(vec2(0.0, 4.0)));
-        p.rect_filled(r, 10.0, theme::with_alpha(Color32::WHITE, 0.10 * shown));
-        p.rect_stroke(r, 10.0, egui::Stroke::new(1.0, theme::with_alpha(Color32::WHITE, 0.2 * shown)), egui::StrokeKind::Inside);
+        p.rect_filled(r, 10.0, theme::glass(0.10 * shown));
+        p.rect_stroke(r, 10.0, egui::Stroke::new(1.0, theme::glass(0.2 * shown)), egui::StrokeKind::Inside);
         let at = r.center() - g.size() / 2.0;
         if hover > 0.0
             && let Some((tex, glow_rect, uv)) = app.lyric_view.text_glow(ui.ctx(), g.clone(), at, 15.0)
@@ -761,7 +759,7 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
             let glow = crate::preset::paint(&style.glow_color, accent);
             p.image(tex, glow_rect, uv, theme::with_alpha(glow, hover * shown));
         }
-        p.galley_with_override_text_color(at, g, theme::with_alpha(Color32::WHITE, shown));
+        p.galley_with_override_text_color(at, g, theme::with_alpha(theme::text(), shown));
         if shown < 1.0 {
             super::animate(ui.ctx());
         }
@@ -780,7 +778,7 @@ fn plain_lyrics(app: &mut App, ui: &mut Ui, rect: Rect, lyrics: &Lyrics) {
         let size = (32.0 * style.size.clamp(0.6, 1.6)).min(rect.width() / 12.5).max(18.0);
         for l in &lyrics.lines {
             let font = theme::lyric_font_for(&style.font, style.weight, size, &l.text);
-            let color = theme::with_alpha(Color32::WHITE, 0.85);
+            let color = theme::with_alpha(theme::text(), 0.85);
             if crate::bidi::has_rtl(&l.text) {
                 // Wrapped in reading order, each row in display order; RTL lines start on the right.
                 let width = ui.available_width();

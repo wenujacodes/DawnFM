@@ -134,6 +134,7 @@ struct Cfg {
     weight: Weight,
     size: f32,
     active: Color32,
+    base: Color32,
     /// Alpha of dim text on the line being sung.
     inactive_alpha: f32,
     glow: Color32,
@@ -223,13 +224,26 @@ impl Cfg {
             None => (glow, glow),
         };
         let pad = css.as_ref().and_then(|c| c.padding_inline).map_or((0.0, 0.0), |p| (p[0] * rem / 10.0, p[1] * rem / 10.0));
+        let light = theme::light();
+        let base = if light { theme::text() } else { Color32::WHITE };
+        let active = if light && (s.sung_color == "white" || s.sung_color.is_empty()) {
+            theme::text()
+        } else {
+            crate::preset::paint(&s.sung_color, accent)
+        };
+        let glow_color = if light && s.glow_color == "white" {
+            accent
+        } else {
+            crate::preset::paint(&s.glow_color, accent)
+        };
         Self {
             font: theme::effective_font(&s.font),
             weight,
             size,
-            active: crate::preset::paint(&s.sung_color, accent),
+            active,
+            base,
             inactive_alpha: s.active_alpha,
-            glow: crate::preset::paint(&s.glow_color, accent),
+            glow: glow_color,
             glow_rem: if css.is_some() { 0.8 } else { 0.8 * (1.0 + glow) },
             scale: 0.95,
             active_scale: s.active_scale.max(1.0),
@@ -861,7 +875,7 @@ impl View {
         let ctx = ui.ctx().clone();
         self.shown_pass = ctx.cumulative_pass_nr();
         let cfg = Cfg::new(f.style, f.accent, rect.width(), ctx.content_rect().width(), f.centered, f.scale);
-        let layout_key = hash((f.key, rect.width().round() as i32, cfg.size.to_bits(), cfg.padding.to_bits(), cfg.max_scale().to_bits(), cfg.centered, &cfg.font, cfg.weight as u8));
+        let layout_key = hash((f.key, rect.width().round() as i32, cfg.size.to_bits(), cfg.padding.to_bits(), cfg.max_scale().to_bits(), cfg.centered, &cfg.font, cfg.weight as u8, theme::light()));
         if self.layout.as_ref().is_none_or(|l| l.key != layout_key) {
             self.relayout(ui, &cfg, &f, layout_key, rect);
         }
@@ -1051,7 +1065,7 @@ impl View {
                 let o = transform_origin(block_rect, b.align, content.x);
                 let g = ctx.fonts_mut(|fv| fv.layout(text.clone(), font.clone(), Color32::WHITE, line_w - cfg.size * 0.5));
                 let xf = Xf { origin: o, scale: cfg.scale, content };
-                paint_galley(&painter, &g, pos2(0.0, cfg.padding), &xf, theme::with_alpha(Color32::WHITE, a), atlas);
+                paint_galley(&painter, &g, pos2(0.0, cfg.padding), &xf, theme::with_alpha(cfg.base, a), atlas);
                 continue;
             }
             let li = b.line.unwrap();
@@ -1170,7 +1184,7 @@ impl View {
                     // Rendered at the line's scale; snapped so it lands 1:1 on screen pixels.
                     let to = xf.rect(rr);
                     let snapped = (to.min.to_vec2() * ppp).round() / ppp;
-                    painter.image(tex, to.translate(snapped - to.min.to_vec2()), uv, theme::with_alpha(Color32::WHITE, opacity));
+                    painter.image(tex, to.translate(snapped - to.min.to_vec2()), uv, theme::with_alpha(cfg.base, opacity));
                 }
                 animating |= st.exit.is_some();
             } else {
@@ -1182,7 +1196,7 @@ impl View {
                     if d.pill {
                         let r = dxf.rect(d.rect);
                         let radius = (cfg.rem() * scale).min(255.0) as u8;
-                        painter.rect(r, radius, theme::with_alpha(Color32::WHITE, 0.05 * a), egui::Stroke::new(1.0, theme::with_alpha(Color32::WHITE, 0.1 * a)), egui::StrokeKind::Inside);
+                        painter.rect(r, radius, theme::with_alpha(cfg.base, 0.05 * a), egui::Stroke::new(1.0, theme::with_alpha(cfg.base, 0.1 * a)), egui::StrokeKind::Inside);
                     }
                     match &d.body {
                         DecoBody::Timed { words, groups } => {
@@ -1192,7 +1206,7 @@ impl View {
                             let wrap = d.rect.width() + 1.0;
                             let g = ctx.fonts_mut(|fv| fv.layout(text.clone(), font.clone(), Color32::WHITE, wrap));
                             let pad = if d.pill { vec2(cfg.rem() * 0.75 + 1.0, cfg.rem() * 0.25 + 1.0) } else { Vec2::ZERO };
-                            paint_galley(&painter, &g, d.rect.min + pad, &dxf, theme::with_alpha(Color32::WHITE, text_alpha * a), atlas);
+                            paint_galley(&painter, &g, d.rect.min + pad, &dxf, theme::with_alpha(cfg.base, text_alpha * a), atlas);
                         }
                     }
                 }
@@ -1758,7 +1772,7 @@ fn paint_words(
         let quads = word_glyphs(ctx, w, lit, cfg, wob, atlas);
         let dim_c = if w.bg { dim * 0.78 } else { dim } * opacity;
         for q in &quads {
-            push_quad(&mut base, xf.rect(q.rect), q.uv, theme::with_alpha(Color32::WHITE, dim_c), &|_| 1.0, &no_cut);
+            push_quad(&mut base, xf.rect(q.rect), q.uv, theme::with_alpha(cfg.base, dim_c), &|_| 1.0, &no_cut);
         }
         per_word.push((quads, wob));
     }
@@ -2315,7 +2329,7 @@ fn paint_instrumental(painter: &egui::Painter, cfg: &Cfg, b: &Block, xf: &Xf, t:
         // only one of them can be happening at a time.
         let k = ((t - b.start - i as f64 * step) / step).clamp(0.0, 1.0) as f32;
         let lit = k * k * (3.0 - 2.0 * k);
-        painter.circle_filled(c, r, theme::with_alpha(Color32::WHITE, GAP_DOT_REST * alpha));
+        painter.circle_filled(c, r, theme::with_alpha(cfg.base, GAP_DOT_REST * alpha));
         if lit > 0.0 {
             painter.circle_filled(c, r, theme::with_alpha(cfg.active, lit * alpha));
         }
