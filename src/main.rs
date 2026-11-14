@@ -137,7 +137,7 @@ fn main() -> eframe::Result {
         Box::new(|cc| {
             let ctx = cc.egui_ctx.clone();
             theme::install_style(&ctx);
-            theme::install_fonts(&ctx, "inter");
+            theme::install_fonts(&ctx, if cfg!(target_os = "macos") { "sfpro" } else { "inter" });
 
             // Background threads wake the UI through this; set once the context exists.
             static CTX: OnceLock<egui::Context> = OnceLock::new();

@@ -462,7 +462,15 @@ pub fn font_choice() -> String {
 /// The font name to draw with where a theme asks for `theme_font`.
 pub fn effective_font(theme_font: &str) -> String {
     let choice = FONT_CHOICE.read_unpoisoned();
-    if choice.is_empty() { theme_font.to_owned() } else { choice.clone() }
+    if choice.is_empty() {
+        if cfg!(target_os = "macos") && (theme_font.is_empty() || theme_font.eq_ignore_ascii_case("inter")) {
+            "sfpro".to_owned()
+        } else {
+            theme_font.to_owned()
+        }
+    } else {
+        choice.clone()
+    }
 }
 
 /// The family key for a font name: a bundled face, "choice" for the installed font the
