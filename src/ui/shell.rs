@@ -113,6 +113,7 @@ pub fn background(app: &mut App, ui: &mut Ui, screen: Rect, now: f64, only: Opti
 // ------------------------------------------------------------------ sidebar
 
 /// How the theme draws nav items.
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 struct NavLook {
     style: crate::preset::NavStyle,
@@ -129,25 +130,14 @@ impl NavLook {
 /// A nav item's background in the theme's nav style; returns its icon colour.
 /// `h` and `s` are the hover and selected animations (0..1).
 fn nav_bg(ui: &Ui, look: NavLook, rect: Rect, h: f32, s: f32) -> Color32 {
-    use crate::preset::NavStyle;
-    let (nav_r, accent) = (look.radius, look.accent);
-    let icon_fg = theme::lerp_color(theme::text_dim(), theme::text(), (h + s).min(1.0));
-    match look.style {
-        NavStyle::Pill => {
-            ui.painter().rect_filled(rect, nav_r, theme::glass(0.05 * h + 0.10 * s));
-            icon_fg
-        }
-        NavStyle::Accent => {
-            ui.painter().rect_filled(rect, nav_r, theme::glass(0.05 * h + 0.08 * s));
-            accent
-        }
-        NavStyle::Bar => {
-            ui.painter().rect_filled(rect, nav_r, theme::glass(0.05 * h));
-            let bar = Rect::from_center_size(pos2(rect.left() + 2.0, rect.center().y), vec2(3.0, 20.0 * s));
-            ui.painter().rect_filled(bar, 2.0, accent);
-            icon_fg
-        }
+    let accent = look.accent;
+    let pill_rect = rect.shrink2(vec2(8.0, 1.0));
+    if s > 0.0 {
+        ui.painter().rect_filled(pill_rect, 6.0, theme::with_alpha(accent, 0.20 * s));
+    } else if h > 0.0 {
+        ui.painter().rect_filled(pill_rect, 6.0, theme::glass(0.06 * h));
     }
+    if s > 0.5 { accent } else { theme::lerp_color(theme::text_dim(), theme::text(), h) }
 }
 
 /// Sidebar width (points).
@@ -206,7 +196,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         let s = theme::anim_bool(ui.ctx(), resp.id.with("s"), selected, 0.2);
         let icon_fg = nav_bg(ui, look, rect, h, s);
         paint(ui, pos2(rect.left() + ICON_X, rect.center().y), icon_fg);
-        let fg = theme::label();
+        let fg = if selected { theme::label() } else { theme::lerp_color(theme::text_dim(), theme::label(), h) };
         let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
         ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, fg);
         if resp.clicked() {
@@ -220,13 +210,13 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
     let section = |ui: &mut Ui, title: &str| -> bool {
         let key = egui::Id::unique(("sidebar-section", title));
         let mut open = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(key, || true));
-        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
         let resp = named(resp, title).on_hover_cursor(egui::CursorIcon::PointingHand);
         let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
         let c = theme::lerp_color(theme::text_faint(), theme::text_dim(), h);
-        ui.painter().text(pos2(r.left() + 8.0, r.center().y), Align2::LEFT_CENTER, title, theme::semibold(11.0), c);
+        ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, title.to_uppercase(), theme::semibold(11.0), c);
         let k = theme::anim_bool(ui.ctx(), resp.id.with("open"), open, 0.15);
-        icon_at(ui, pos2(r.right() - 12.0, r.center().y), if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 12.0, c);
+        icon_at(ui, pos2(r.right() - 14.0, r.center().y), if k > 0.5 { icon::CHEVRON_DOWN } else { icon::CHEVRON_RIGHT }, 11.0, c);
         if resp.clicked() {
             open = !open;
             ui.data_mut(|d| d.insert_persisted(key, open));
@@ -240,7 +230,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
         let s = theme::anim_bool(ui.ctx(), resp.id.with("s"), selected, 0.2);
         let icon_fg = nav_bg(ui, look, rect, h, s);
         glyphs::draw(ui, pos2(rect.left() + ICON_X, rect.center().y), size, glyph, icon_fg);
-        let fg = theme::label();
+        let fg = if selected { theme::label() } else { theme::lerp_color(theme::text_dim(), theme::label(), h) };
         let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
         ui.painter().text(pos2(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, label, font, fg);
         if resp.clicked() {
@@ -354,12 +344,18 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                 let h = theme::anim_bool(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.15);
                 let selected = matches!(&c.target, Target::Playlist(id) if app.page == Page::Playlist(id.clone()));
                 let lift = if is_dragged { 0.10 } else { 0.0 };
-                ui.painter().rect_filled(rect, look.radius, theme::glass(0.05 * h + if selected { 0.08 } else { 0.0 } + lift));
-                let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(22.0));
-                paint_cover(ui, img, &c.thumbs, theme::thumb_radius(), 1.0);
+                let pill_rect = rect.shrink2(vec2(8.0, 1.0));
+                if selected {
+                    ui.painter().rect_filled(pill_rect, 6.0, theme::with_alpha(look.accent, 0.20 + lift));
+                } else if h > 0.0 || lift > 0.0 {
+                    ui.painter().rect_filled(pill_rect, 6.0, theme::glass(0.06 * h + lift));
+                }
+                let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(20.0));
+                paint_cover(ui, img, &c.thumbs, 4.0, 1.0);
                 let w = full_w - 54.0;
-                let fg = theme::label();
-                text_at(ui, pos2(rect.left() + 44.0, rect.center().y - 8.5), &c.title, theme::regular(13.0), fg, w);
+                let fg = if selected { theme::label() } else { theme::lerp_color(theme::text_dim(), theme::label(), h) };
+                let font = if selected { theme::semibold(13.0) } else { theme::regular(13.0) };
+                text_at(ui, pos2(rect.left() + 44.0, rect.center().y - 8.5), &c.title, font, fg, w);
                 egui::Popup::context_menu(&resp).show(|ui| {
                     ui.set_min_width(190.0);
                     if ui.button("Hide from sidebar").clicked() {
