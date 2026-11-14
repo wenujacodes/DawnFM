@@ -428,10 +428,10 @@ fn sleeve(app: &mut App, ui: &mut Ui, x0: f32, w: f32, info_y: f32, track: &crat
     }
     let at = |p: egui::Pos2| (((p.x - x0) / w.max(1.0)).clamp(0.0, 1.0) * total).max(0.0);
     let tc = theme::with_alpha(Color32::WHITE, 0.62);
-    let g = widgets::galley(ui, &super::fmt_time(pos as u32), theme::tabular(11.0), tc, 80.0);
+    let g = widgets::galley(ui, &super::fmt_time(pos as u32), theme::semibold(11.0), tc, 80.0);
     ui.painter().galley(pos2(x0, hit.bottom() + 2.0), g, tc);
     let left = super::fmt_time((total - pos).max(0.0) as u32);
-    let g = widgets::galley(ui, &format!("-{left}"), theme::tabular(11.0), tc, 80.0);
+    let g = widgets::galley(ui, &format!("-{left}"), theme::semibold(11.0), tc, 80.0);
     ui.painter().galley(pos2(x0 + w - g.size().x, hit.bottom() + 2.0), g, tc);
     // The quality mark sits between the two times, as the reference draws it.
     let badge_w = audio_badge_width(ui, app, false);

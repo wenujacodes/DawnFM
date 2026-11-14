@@ -321,9 +321,6 @@ pub fn semibold(size: f32) -> FontId {
 pub fn bold(size: f32) -> FontId {
     FontId::new(size, BOLD.clone())
 }
-pub fn tabular(size: f32) -> FontId {
-    FontId::monospace(size)
-}
 pub fn icon_font(size: f32) -> FontId {
     FontId::new(size, ICONS.clone())
 }
