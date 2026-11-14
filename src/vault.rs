@@ -22,6 +22,7 @@ fn key(name: &str, data_dir: &Path) -> String {
     }
 }
 
+#[allow(dead_code)]
 mod store {
     /// The size of one stored part.
     const CHUNK: usize = 2560;
@@ -130,18 +131,39 @@ mod file {
     }
 
     pub fn get(key: &str, dir: &Path) -> anyhow::Result<Option<Vec<u8>>> {
-        match std::fs::read(path(key, dir)) {
-            Ok(b) => Ok(Some(b)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
+        let p = path(key, dir);
+        match std::fs::read(&p) {
+            Ok(b) => return Ok(Some(b)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
         }
+        for old in super::OLD_SERVICES {
+            if let Some(old_dir) = directories::ProjectDirs::from("", "", old).map(|d| d.data_dir().to_path_buf()) {
+                let old_p = path(key, &old_dir);
+                if old_p.exists() {
+                    if let Ok(b) = std::fs::read(&old_p) {
+                        let _ = set(key, dir, &b);
+                        return Ok(Some(b));
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
     pub fn set(key: &str, dir: &Path, secret: &[u8]) -> anyhow::Result<()> {
         use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path(key, dir))?;
-        Ok(f.write_all(secret)?)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path(key, dir))?;
+            Ok(f.write_all(secret)?)
+        }
+        #[cfg(not(unix))]
+        {
+            let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(path(key, dir))?;
+            Ok(f.write_all(secret)?)
+        }
     }
 
     pub fn delete(key: &str, dir: &Path) -> anyhow::Result<()> {
@@ -152,32 +174,24 @@ mod file {
     }
 }
 
-/// The Keychain when it answers, otherwise the file in `dir`.
+/// Secure file-based storage in the user's private application data folder.
+///
+/// On macOS, ad-hoc signed apps accessing the login Keychain trigger modal OS
+/// password authorization popups for every chunk and every credential on every launch.
+/// Storing secrets in owner-only files (mode 0o600) prevents macOS password prompts
+/// while keeping secrets strictly private to the running user account.
 mod backend {
     use std::path::Path;
 
     pub fn get(key: &str, dir: &Path) -> anyhow::Result<Option<Vec<u8>>> {
-        match super::store::get(key) {
-            Ok(Some(s)) => return Ok(Some(s)),
-            Ok(None) => {}
-            Err(e) => log::debug!("credential store unavailable: {e:#}"),
-        }
         super::file::get(key, dir)
     }
 
     pub fn set(key: &str, dir: &Path, secret: &[u8]) -> anyhow::Result<()> {
-        match super::store::set(key, secret) {
-            // Saved in the keyring: drop any copy an earlier run left in a file.
-            Ok(()) => return super::file::delete(key, dir),
-            Err(e) => log::info!("no credential store, keeping {key:?} in a file: {e:#}"),
-        }
         super::file::set(key, dir, secret)
     }
 
     pub fn delete(key: &str, dir: &Path) -> anyhow::Result<()> {
-        if let Err(e) = super::store::delete(key) {
-            log::debug!("credential store unavailable: {e:#}");
-        }
         super::file::delete(key, dir)
     }
 }
