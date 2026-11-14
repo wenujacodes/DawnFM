@@ -375,6 +375,7 @@ pub fn paint_cover_px(ui: &Ui, rect: Rect, thumbs: &[Thumb], radius: f32, zoom: 
 }
 
 /// Paint the cover cropped to fill `rect` (any aspect), tinted, for full-bleed backdrops.
+#[allow(dead_code)]
 pub fn paint_cover_fill(ui: &Ui, rect: Rect, thumbs: &[Thumb], tint: Color32) {
     let ppp = ui.ctx().pixels_per_point();
     let px = fetch_px((rect.width().max(rect.height()) * ppp) as u32).clamp(200, 1200);

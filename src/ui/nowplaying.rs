@@ -34,29 +34,8 @@ pub fn overlay(app: &mut App, ctx: &egui::Context, now: f64) {
                 super::titlebar::drag_area(ui, Rect::from_min_size(rect.min, vec2(rect.width(), super::titlebar::HEIGHT)), "now-playing");
             }
             let painter = ui.painter_at(rect);
-            let art = matches!(b.mode, BgMode::Kawarp | BgMode::CoverStatic);
-            if b.mode == BgMode::CoverFullbleed {
-                // The cover itself fills the screen behind a scrim. With the lyrics-only
-                // layout on a wide window it fills the height on the left instead and
-                // fades out toward the lyrics (reCover).
-                // What it fades into is a dark shade of the cover's own colour, not the
-                // look's near-black, gliding to the next song's as the art changes.
-                let shade = theme::lerp_color(look.solid(), app.accent, 0.26).to_array();
-                let ch = |i: usize| theme::anim(ctx, ("np-shade", i), f32::from(shade[i]), 0.9).round() as u8;
-                let solid = Color32::from_rgb(ch(0), ch(1), ch(2));
-                painter.rect_filled(rect, 0.0, solid);
-                if let Some(track) = app.shown() {
-                    let side_by_side = look.cover.layout == crate::preset::Layout::LyricsOnly && rect.width() >= 900.0;
-                    let area = if side_by_side { Rect::from_min_size(rect.min, Vec2::splat(rect.height())) } else { rect };
-                    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
-                    child.set_clip_rect(area);
-                    widgets::paint_cover_fill(&child, area, &track.thumbs, Color32::from_gray((b.np_dim.clamp(0.0, 1.0) * 255.0) as u8));
-                    if side_by_side {
-                        let fade = Rect::from_min_max(pos2(area.center().x - area.width() * 0.1, area.top()), area.max);
-                        super::shell::hgradient(&painter, fade, Color32::TRANSPARENT, solid);
-                    }
-                }
-            } else if let Some(bg) = app.bg.as_ref().filter(|_| art) {
+            let art = matches!(b.mode, BgMode::Kawarp | BgMode::CoverStatic | BgMode::CoverFullbleed);
+            if let Some(bg) = app.bg.as_ref().filter(|_| art) {
                 let blend = theme::ease_in_out(((now - app.art_changed) / 1.4) as f32);
                 let level = if app.reactive_bg && app.playing() { app.audio.status.level() * b.reactive } else { 0.0 };
                 bg.paint(
@@ -77,7 +56,8 @@ pub fn overlay(app: &mut App, ctx: &egui::Context, now: f64) {
                 painter.rect_filled(rect, 0.0, theme::lerp_color(theme::bg(), app.accent_color(), 0.25));
             }
             let k = b.scrim / 0.3;
-            super::shell::vgradient(ui.painter(), rect, theme::shade((0.18 * k).min(0.95)), theme::shade((0.42 * k).min(0.95)));
+            // Gentle, subtle scrim gradient to avoid harsh transitions or hard dark splits.
+            super::shell::vgradient(ui.painter(), rect, theme::shade((0.06 * k).min(0.5)), theme::shade((0.16 * k).min(0.5)));
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink2(vec2(32.0, 20.0))));
             body(app, &mut child, now);
         });

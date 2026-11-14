@@ -16,6 +16,7 @@ pub fn vgradient(painter: &egui::Painter, rect: Rect, top: Color32, bottom: Colo
 }
 
 /// Horizontal gradient (left colour → right colour) over `rect`.
+#[allow(dead_code)]
 pub fn hgradient(painter: &egui::Painter, rect: Rect, left: Color32, right: Color32) {
     gradient(painter, rect, [left, right, left, right]);
 }

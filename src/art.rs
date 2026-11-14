@@ -33,9 +33,9 @@ pub fn process(bytes: &[u8]) -> anyhow::Result<Art> {
             p[c] += (tint[c] - p[c]) * dark * 0.45;
         }
     }
-    // Three box-blur passes approximate a wide Gaussian (Kawarp runs 8 Kawase passes).
-    for _ in 0..3 {
-        px = box_blur(&px, SIZE as usize, 6);
+    // Four wide box-blur passes produce an ultra-smooth, creamy Gaussian blur effect.
+    for _ in 0..4 {
+        px = box_blur(&px, SIZE as usize, 8);
     }
     let rgba = px.iter().flat_map(|p| [p[0] as u8, p[1] as u8, p[2] as u8, 255]).collect();
     Ok(Art { rgba, accent })
@@ -73,26 +73,74 @@ fn box_blur(src: &[[f32; 3]], n: usize, r: usize) -> Vec<[f32; 3]> {
     pass(&pass(src, true), false)
 }
 
-/// The most vivid colour (falling back to the average for greyscale covers).
+/// Extracts the dominant, most representative colour obtained across the artwork.
 fn palette(img: &image::RgbImage) -> Color32 {
-    let (mut sum, mut n) = ([0.0f32; 3], 0.0f32);
-    let mut best = (0.0f32, [200.0, 60.0, 80.0]);
+    let mut sum = [0.0f32; 3];
+    let mut total_pixels = 0.0f32;
+
+    #[derive(Default, Clone, Copy)]
+    struct Bin {
+        count: u32,
+        sum: [f32; 3],
+    }
+    let mut bins = [Bin { count: 0, sum: [0.0; 3] }; 4096];
+
     for p in img.pixels() {
-        let rgb = [p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0];
+        let rgb = [p[0] as f32, p[1] as f32, p[2] as f32];
         for c in 0..3 {
             sum[c] += rgb[c];
         }
-        n += 1.0;
-        let (max, min) = (rgb[0].max(rgb[1]).max(rgb[2]), rgb[0].min(rgb[1]).min(rgb[2]));
+        total_pixels += 1.0;
+
+        let r_bin = (p[0] >> 4) as usize;
+        let g_bin = (p[1] >> 4) as usize;
+        let b_bin = (p[2] >> 4) as usize;
+        let idx = (r_bin << 8) | (g_bin << 4) | b_bin;
+
+        bins[idx].count += 1;
+        bins[idx].sum[0] += rgb[0];
+        bins[idx].sum[1] += rgb[1];
+        bins[idx].sum[2] += rgb[2];
+    }
+
+    let mut best_score = 0.0f32;
+    let mut best_color = [200.0, 60.0, 80.0];
+
+    for bin in &bins {
+        if bin.count == 0 {
+            continue;
+        }
+        let count_f = bin.count as f32;
+        let r = bin.sum[0] / count_f / 255.0;
+        let g = bin.sum[1] / count_f / 255.0;
+        let b = bin.sum[2] / count_f / 255.0;
+
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+        let luma = 0.299 * r + 0.587 * g + 0.114 * b;
         let sat = if max > 0.0 { (max - min) / max } else { 0.0 };
-        // Favour saturated, mid-to-bright pixels.
-        let score = sat * sat * (1.0 - (max - 0.75).abs());
-        if score > best.0 {
-            best = (score, [rgb[0] * 255.0, rgb[1] * 255.0, rgb[2] * 255.0]);
+
+        // Exclude extreme dark (pure black) and extreme washed-out white
+        if luma < 0.06 || (luma > 0.94 && sat < 0.12) {
+            continue;
+        }
+
+        // Presence: strongly rewards colours that cover the greatest amount of the artwork
+        let presence = count_f / total_pixels;
+        // Saturation factor: rewards chromatic tones over muddy grey
+        let sat_factor = (sat + 0.25).min(1.0);
+        // Lightness balance: midtones look richest on backgrounds
+        let luma_factor = 1.0 - (luma - 0.52).abs() * 0.7;
+
+        let score = presence.powf(0.7) * sat_factor * luma_factor;
+        if score > best_score {
+            best_score = score;
+            best_color = [bin.sum[0] / count_f, bin.sum[1] / count_f, bin.sum[2] / count_f];
         }
     }
-    let avg = [sum[0] / n * 255.0, sum[1] / n * 255.0, sum[2] / n * 255.0];
-    let accent = if best.0 > 0.05 { best.1 } else { avg };
+
+    let avg = [sum[0] / total_pixels, sum[1] / total_pixels, sum[2] / total_pixels];
+    let accent = if best_score > 0.01 { best_color } else { avg };
     lift(accent)
 }
 
