@@ -412,6 +412,7 @@ pub struct App {
     /// supplied it, with the generation it belongs to.
     audio_info: Option<(u64, crate::hires::Info)>,
     accent: Color32,
+    pub dominant: Color32,
     /// Selected theme preset (see `preset.rs`).
     theme_id: String,
     /// Preset whose chrome (glass, corner radius) is installed in the egui style.
@@ -735,6 +736,7 @@ impl App {
             audio_info: None,
             art_changed: -10.0,
             accent: theme::RED,
+            dominant: Color32::from_rgb(0x18, 0x14, 0x1c),
             theme_id: crate::preset::DEFAULT_ID.to_owned(),
             chrome_applied: None,
             // Dev hook: YTM_APPEARANCE=light|dark|system tries a mode without saving it.
@@ -1088,6 +1090,15 @@ impl App {
             }
         }
         c
+    }
+
+    pub fn dominant_color(&self) -> Color32 {
+        self.dominant
+    }
+
+    pub fn bg_is_light(&self) -> bool {
+        let d = self.dominant;
+        (0.299 * d.r() as f32 + 0.587 * d.g() as f32 + 0.114 * d.b() as f32) / 255.0 > 0.52
     }
 
     /// Whether pages draw light: only the ytm-rs theme has a light mode, and it follows

@@ -14,13 +14,15 @@ pub struct Art {
     pub rgba: Vec<u8>,
     /// Most vivid colour, lifted for use on dark backgrounds (progress bar, highlights).
     pub accent: Color32,
+    /// Most used colour across the artwork, managed so it is neither too dark nor too white.
+    pub dominant: Color32,
 }
 
 pub fn process(bytes: &[u8]) -> anyhow::Result<Art> {
     let img = image::load_from_memory(bytes)?.to_rgb8();
     let small = image::imageops::resize(&img, SIZE, SIZE, image::imageops::FilterType::Triangle);
 
-    let accent = palette(&small);
+    let (accent, dominant) = palette(&small);
     let mut px: Vec<[f32; 3]> = small.pixels().map(|p| [p[0] as f32, p[1] as f32, p[2] as f32]).collect();
 
     // Kawarp's tint pass: pull near-black regions toward the accent so dark covers
@@ -38,7 +40,7 @@ pub fn process(bytes: &[u8]) -> anyhow::Result<Art> {
         px = box_blur(&px, SIZE as usize, 8);
     }
     let rgba = px.iter().flat_map(|p| [p[0] as u8, p[1] as u8, p[2] as u8, 255]).collect();
-    Ok(Art { rgba, accent })
+    Ok(Art { rgba, accent, dominant })
 }
 
 fn smoothstep(a: f32, b: f32, x: f32) -> f32 {
@@ -73,8 +75,9 @@ fn box_blur(src: &[[f32; 3]], n: usize, r: usize) -> Vec<[f32; 3]> {
     pass(&pass(src, true), false)
 }
 
-/// Extracts the dominant, most representative colour obtained across the artwork.
-fn palette(img: &image::RgbImage) -> Color32 {
+/// Extracts the accent colour (vivid) and the dominant/most-used colour in the artwork,
+/// managed so it is neither too dark nor too white.
+fn palette(img: &image::RgbImage) -> (Color32, Color32) {
     let mut sum = [0.0f32; 3];
     let mut total_pixels = 0.0f32;
 
@@ -103,6 +106,38 @@ fn palette(img: &image::RgbImage) -> Color32 {
         bins[idx].sum[2] += rgb[2];
     }
 
+    // 1. Most used color across the artwork (highest bin pixel count)
+    let mut max_count = 0;
+    let mut most_used = [128.0f32, 128.0f32, 128.0f32];
+    for bin in &bins {
+        if bin.count > max_count {
+            max_count = bin.count;
+            let c = bin.count as f32;
+            most_used = [bin.sum[0] / c, bin.sum[1] / c, bin.sum[2] / c];
+        }
+    }
+
+    // Manage dominant color: don't make it too dark or too white, keeping the artwork's hue/tint
+    let (mut dom_r, mut dom_g, mut dom_b) = (most_used[0] / 255.0, most_used[1] / 255.0, most_used[2] / 255.0);
+    let luma = 0.299 * dom_r + 0.587 * dom_g + 0.114 * dom_b;
+    if luma > 0.82 {
+        let factor = 0.82 / luma;
+        dom_r *= factor;
+        dom_g *= factor;
+        dom_b *= factor;
+    } else if luma < 0.16 {
+        let factor = 0.18 / luma.max(0.01);
+        dom_r = (dom_r * factor).min(1.0);
+        dom_g = (dom_g * factor).min(1.0);
+        dom_b = (dom_b * factor).min(1.0);
+    }
+    let dominant = Color32::from_rgb(
+        (dom_r * 255.0).round() as u8,
+        (dom_g * 255.0).round() as u8,
+        (dom_b * 255.0).round() as u8,
+    );
+
+    // 2. Vivid accent color for UI highlights, buttons, and progress bar
     let mut best_score = 0.0f32;
     let mut best_color = [200.0, 60.0, 80.0];
 
@@ -117,11 +152,11 @@ fn palette(img: &image::RgbImage) -> Color32 {
 
         let max = r.max(g).max(b);
         let min = r.min(g).min(b);
-        let luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        let l = 0.299 * r + 0.587 * g + 0.114 * b;
         let sat = if max > 0.0 { (max - min) / max } else { 0.0 };
 
         // Exclude extreme dark (pure black) and extreme washed-out white
-        if luma < 0.06 || (luma > 0.94 && sat < 0.12) {
+        if l < 0.06 || (l > 0.94 && sat < 0.12) {
             continue;
         }
 
@@ -130,7 +165,7 @@ fn palette(img: &image::RgbImage) -> Color32 {
         // Saturation factor: rewards chromatic tones over muddy grey
         let sat_factor = (sat + 0.25).min(1.0);
         // Lightness balance: midtones look richest on backgrounds
-        let luma_factor = 1.0 - (luma - 0.52).abs() * 0.7;
+        let luma_factor = 1.0 - (l - 0.52).abs() * 0.7;
 
         let score = presence.powf(0.7) * sat_factor * luma_factor;
         if score > best_score {
@@ -140,8 +175,10 @@ fn palette(img: &image::RgbImage) -> Color32 {
     }
 
     let avg = [sum[0] / total_pixels, sum[1] / total_pixels, sum[2] / total_pixels];
-    let accent = if best_score > 0.01 { best_color } else { avg };
-    lift(accent)
+    let accent_raw = if best_score > 0.01 { best_color } else { avg };
+    let accent = lift(accent_raw);
+
+    (accent, dominant)
 }
 
 /// Raise brightness so the colour reads on a dark UI.
@@ -164,5 +201,5 @@ pub fn idle() -> Art {
             rgba.extend_from_slice(&[r as u8, g as u8, b as u8, 255]);
         }
     }
-    Art { rgba, accent: Color32::from_rgb(0xff, 0x4e, 0x6a) }
+    Art { rgba, accent: Color32::from_rgb(0xff, 0x4e, 0x6a), dominant: Color32::from_rgb(0x18, 0x14, 0x1c) }
 }

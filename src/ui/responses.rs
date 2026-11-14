@@ -338,6 +338,7 @@ impl App {
             Resp::Art { key, art } => {
                 if self.mix_hold().is_none() && self.current_id() == Some(key.as_str()) {
                     self.accent = art.accent;
+                    self.dominant = art.dominant;
                     if let Some(bg) = &self.bg {
                         bg.set_art(art);
                     }

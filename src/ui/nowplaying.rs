@@ -39,30 +39,12 @@ pub fn overlay(app: &mut App, ctx: &egui::Context, now: f64) {
                 // The cover itself fills the screen behind a scrim. With the lyrics-only
                 // layout on a wide window it fills the height on the left instead and
                 // fades out toward the lyrics (reCover).
-                // What it fades into is a dark shade of the cover's own colour, not the
-                // look's near-black, gliding to the next song's as the art changes.
-                let shade = theme::lerp_color(look.solid(), app.accent, 0.26).to_array();
-                let ch = |i: usize| theme::anim(ctx, ("np-shade", i), f32::from(shade[i]), 0.9).round() as u8;
+                // What it fades into is the dominant / most-used colour of the artwork,
+                // managed so it is neither too dark nor too white, gliding to the next song's.
+                let dom = app.dominant_color().to_array();
+                let ch = |i: usize| theme::anim(ctx, ("np-dom-shade", i), f32::from(dom[i]), 0.9).round() as u8;
                 let solid = Color32::from_rgb(ch(0), ch(1), ch(2));
                 painter.rect_filled(rect, 0.0, solid);
-
-                // Ambient blurred artwork background under/around the cover:
-                if let Some(bg) = app.bg.as_ref() {
-                    let blend = theme::ease_in_out(((now - app.art_changed) / 1.4) as f32);
-                    let level = if app.reactive_bg && app.playing() { app.audio.status.level() * b.reactive } else { 0.0 };
-                    bg.paint(
-                        &painter,
-                        rect,
-                        Params {
-                            time: app.bg_time as f32,
-                            blend,
-                            intensity: b.intensity,
-                            saturation: b.saturation,
-                            dim: b.np_dim * 0.85,
-                            scale: b.scale + level.min(0.5) * 0.12,
-                        },
-                    );
-                }
 
                 if let Some(track) = app.shown().or_else(|| app.current()) {
                     let side_by_side = look.cover.layout == crate::preset::Layout::LyricsOnly && rect.width() >= 860.0;
@@ -71,15 +53,21 @@ pub fn overlay(app: &mut App, ctx: &egui::Context, now: f64) {
                     child.set_clip_rect(area);
                     widgets::paint_cover_fill(&child, area, &track.thumbs, Color32::from_gray((b.np_dim.clamp(0.0, 1.0) * 255.0) as u8));
                     if side_by_side {
-                        // Gentle, smooth gradient fade towards the lyrics side (not a harsh cutoff)
-                        let fade_start = area.center().x - area.width() * 0.2;
+                        // Smooth multi-stop horizontal gradient fade from artwork to the background,
+                        // painted on child's painter directly over the cover image so it blends seamlessly into solid.
+                        let fade_start = area.center().x - area.width() * 0.15;
                         let fade_w = area.right() - fade_start;
-                        let mid_x = fade_start + fade_w * 0.45;
-                        let fade1 = Rect::from_min_max(pos2(fade_start, area.top()), pos2(mid_x, area.bottom()));
-                        let fade2 = Rect::from_min_max(pos2(mid_x, area.top()), area.max);
-                        let half_solid = theme::with_alpha(solid, 0.55);
-                        super::shell::hgradient(&painter, fade1, Color32::TRANSPARENT, half_solid);
-                        super::shell::hgradient(&painter, fade2, half_solid, solid);
+                        let step1 = fade_start + fade_w * 0.35;
+                        let step2 = fade_start + fade_w * 0.70;
+                        let r1 = Rect::from_min_max(pos2(fade_start, area.top()), pos2(step1, area.bottom()));
+                        let r2 = Rect::from_min_max(pos2(step1, area.top()), pos2(step2, area.bottom()));
+                        let r3 = Rect::from_min_max(pos2(step2, area.top()), area.max);
+                        let c1 = theme::with_alpha(solid, 0.30);
+                        let c2 = theme::with_alpha(solid, 0.70);
+                        let cp = child.painter();
+                        super::shell::hgradient(cp, r1, Color32::TRANSPARENT, c1);
+                        super::shell::hgradient(cp, r2, c1, c2);
+                        super::shell::hgradient(cp, r3, c2, solid);
                     }
                 }
             } else if let Some(bg) = app.bg.as_ref().filter(|_| art) {
@@ -103,8 +91,12 @@ pub fn overlay(app: &mut App, ctx: &egui::Context, now: f64) {
                 painter.rect_filled(rect, 0.0, theme::lerp_color(theme::bg(), app.accent_color(), 0.25));
             }
             let k = b.scrim / 0.3;
-            // Gentle, subtle scrim gradient to avoid harsh transitions or hard dark splits.
-            super::shell::vgradient(ui.painter(), rect, theme::shade((0.06 * k).min(0.5)), theme::shade((0.16 * k).min(0.5)));
+            if app.bg_is_light() {
+                // Gentle scrim on light backgrounds so text stays readable and gradients are soft
+                super::shell::vgradient(ui.painter(), rect, Color32::from_black_alpha(10), Color32::from_black_alpha(30));
+            } else {
+                super::shell::vgradient(ui.painter(), rect, theme::shade((0.06 * k).min(0.5)), theme::shade((0.16 * k).min(0.5)));
+            }
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink2(vec2(32.0, 20.0))));
             body(app, &mut child, now);
         });
@@ -748,7 +740,8 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
         h.finish()
     };
     let scale = app.lyric_prefs.text_scale;
-    let frame = karaoke::Frame { lyrics, key, roman, trans, t, playing, now, rect, style, accent, centered, scale };
+    let bg_light = app.bg_is_light();
+    let frame = karaoke::Frame { lyrics, key, roman, trans, t, playing, now, rect, style, accent, centered, scale, bg_light };
     // The view lives in `app`; the frame borrows `app` for decorations, so swap it out.
     let mut view = std::mem::take(&mut app.lyric_view);
     let out = if karaoke::dev_off("view") { karaoke::Out { seek: None, animating: true, user_scrolling: false } } else { view.show(ui, frame) };
@@ -767,7 +760,8 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
     let shown = theme::anim_bool(ui.ctx(), "lyr-resume", out.user_scrolling, 0.2);
     if shown > 0.0 {
         let font = theme::lyric_font(&style.font, crate::preset::Weight::Semibold, 17.5);
-        let g = widgets::galley(ui, "Resume Autoscroll", font, theme::text(), rect.width() - 40.0);
+        let resume_color = if bg_light { Color32::from_rgb(0x18, 0x14, 0x1c) } else { theme::text() };
+        let g = widgets::galley(ui, "Resume Autoscroll", font, resume_color, rect.width() - 40.0);
         let size = g.size() + vec2(20.0, 10.0) + Vec2::splat(2.0);
         let em = 17.5;
         let y = rect.top() + 8.0 + egui::lerp(-3.0 * em..=0.5 * em, theme::ease_out(shown));
@@ -786,7 +780,7 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
             let glow = crate::preset::paint(&style.glow_color, accent);
             p.image(tex, glow_rect, uv, theme::with_alpha(glow, hover * shown));
         }
-        p.galley_with_override_text_color(at, g, theme::with_alpha(theme::text(), shown));
+        p.galley_with_override_text_color(at, g, theme::with_alpha(resume_color, shown));
         if shown < 1.0 {
             super::animate(ui.ctx());
         }
@@ -798,14 +792,17 @@ fn synced(app: &mut App, ui: &mut Ui, rect: Rect, id: &str, lyrics: &Lyrics, now
 
 fn plain_lyrics(app: &mut App, ui: &mut Ui, rect: Rect, lyrics: &Lyrics) {
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    let bg_light = app.bg_is_light();
+    let default_text = if bg_light { Color32::from_rgb(0x18, 0x14, 0x1c) } else { theme::text() };
+    let faint_text = if bg_light { Color32::from_black_alpha(140) } else { theme::text_faint() };
     egui::ScrollArea::vertical().id_salt("plain-lyrics").auto_shrink(false).show(&mut child, |ui| {
-        ui.label(egui::RichText::new("These lyrics aren't synced").font(theme::regular(13.0)).color(theme::text_faint()));
+        ui.label(egui::RichText::new("These lyrics aren't synced").font(theme::regular(13.0)).color(faint_text));
         ui.add_space(14.0);
         let style = &app.look().lyrics;
         let size = (32.0 * style.size.clamp(0.6, 1.6)).min(rect.width() / 12.5).max(18.0);
         for l in &lyrics.lines {
             let font = theme::lyric_font_for(&style.font, style.weight, size, &l.text);
-            let color = theme::with_alpha(theme::text(), 0.85);
+            let color = theme::with_alpha(default_text, 0.85);
             if crate::bidi::has_rtl(&l.text) {
                 // Wrapped in reading order, each row in display order; RTL lines start on the right.
                 let width = ui.available_width();

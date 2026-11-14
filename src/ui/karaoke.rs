@@ -179,7 +179,7 @@ impl Cfg {
         self.active_scale.max(self.css.as_ref().and_then(|c| c.hover_scale).unwrap_or(1.0)).max(1.0)
     }
 
-    fn new(s: &LyricStyle, accent: Color32, width: f32, viewport: f32, centered: bool, scale: f32) -> Self {
+    fn new(s: &LyricStyle, accent: Color32, width: f32, viewport: f32, centered: bool, scale: f32, bg_light: bool) -> Self {
         let css = s.css.clone();
         // Font size and rem: a theme's own `--blyrics-font-size` steps in YouTube Music's
         // 10 px rem; otherwise 48 pt scaled by the preset with the extension's proportions.
@@ -224,10 +224,10 @@ impl Cfg {
             None => (glow, glow),
         };
         let pad = css.as_ref().and_then(|c| c.padding_inline).map_or((0.0, 0.0), |p| (p[0] * rem / 10.0, p[1] * rem / 10.0));
-        let light = theme::light();
-        let base = if light { theme::text() } else { Color32::WHITE };
+        let light = theme::light() || bg_light;
+        let base = if light { Color32::from_rgb(0x22, 0x1e, 0x26) } else { Color32::WHITE };
         let active = if light && (s.sung_color == "white" || s.sung_color.is_empty()) {
-            theme::text()
+            Color32::from_rgb(0x11, 0x0e, 0x14)
         } else {
             crate::preset::paint(&s.sung_color, accent)
         };
@@ -832,6 +832,8 @@ pub struct Frame<'a> {
     pub centered: bool,
     /// The listener's lyrics text size, a multiple of the theme's.
     pub scale: f32,
+    /// True when the background behind the lyrics is light, so lyrics draw in dark high-contrast ink.
+    pub bg_light: bool,
 }
 
 pub struct Out {
@@ -876,8 +878,8 @@ impl View {
         let rect = f.rect;
         let ctx = ui.ctx().clone();
         self.shown_pass = ctx.cumulative_pass_nr();
-        let cfg = Cfg::new(f.style, f.accent, rect.width(), ctx.content_rect().width(), f.centered, f.scale);
-        let layout_key = hash((f.key, rect.width().round() as i32, cfg.size.to_bits(), cfg.padding.to_bits(), cfg.max_scale().to_bits(), cfg.centered, &cfg.font, cfg.weight as u8, theme::light()));
+        let cfg = Cfg::new(f.style, f.accent, rect.width(), ctx.content_rect().width(), f.centered, f.scale, f.bg_light);
+        let layout_key = hash((f.key, rect.width().round() as i32, cfg.size.to_bits(), cfg.padding.to_bits(), cfg.max_scale().to_bits(), cfg.centered, &cfg.font, cfg.weight as u8, theme::light(), f.bg_light));
         if self.layout.as_ref().is_none_or(|l| l.key != layout_key) {
             self.relayout(ui, &cfg, &f, layout_key, rect);
         }
