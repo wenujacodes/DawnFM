@@ -440,7 +440,7 @@ const PLAY_SONG_WAIT: std::time::Duration = std::time::Duration::from_millis(250
 const PREFETCH_SONG_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
 /// How long playback waits for the hi-res sources before falling back to YouTube. A cold
 /// addon mints a lossless URL in a few seconds, and every source is asked at once.
-const HIRES_WAIT: std::time::Duration = std::time::Duration::from_secs(12);
+const HIRES_WAIT: std::time::Duration = std::time::Duration::from_millis(2000);
 
 #[derive(Clone)]
 pub struct Backend {
