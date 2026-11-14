@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
-const BLOCK: u64 = 256 * 1024;
+const BLOCK: u64 = 64 * 1024;
 const WORKERS: usize = 4;
 /// Tries per block before the download gives up, waiting a little longer each time
 /// (about half a minute in all): long enough to ride out a dropped connection.
@@ -32,14 +32,14 @@ const STALL: Duration = Duration::from_secs(20);
 const MAX_REFRESHES: u32 = 2;
 /// A prefetch only fetches this much (~16 s of audio) until playback actually opens it:
 /// enough to start at once, without holding a whole extra song in memory.
-const HEAD_BLOCKS: usize = 2;
+const HEAD_BLOCKS: usize = 8;
 /// Files larger than this (about 20 minutes at 256 kbps: long mixes, whole albums in
 /// one video) aren't kept whole. Each reader keeps a window around where it reads,
 /// `AHEAD` blocks forward (about 5 minutes at 256 kbps) and `BEHIND` back; the rest is dropped and
 /// fetched again if a seek goes back to it.
 const WINDOWED_FROM: u64 = 40 * 1024 * 1024;
-const AHEAD: usize = 40;
-const BEHIND: usize = 8;
+const AHEAD: usize = 160;
+const BEHIND: usize = 32;
 
 /// Resolves a fresh stream URL for the same video.
 pub type Refresh = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<String>> + Send>> + Send + Sync>;
