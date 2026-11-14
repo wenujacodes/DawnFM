@@ -315,7 +315,7 @@ fn replace_binary(new: &Path, exe: &Path, relaunch: bool) {
 fn replace_bundle(new: &Path, app: &Path, relaunch: bool) {
     let parent = app.parent().unwrap_or(Path::new("/"));
     let (tmp, old) = (parent.join(".dawnfm.app.new"), parent.join(".dawnfm.app.old"));
-    // A copy still under an earlier name ("Dusk FM.app") comes back as Dawn FM.app.
+    // A copy comes back as Dawn FM.app.
     let renamed = parent.join(APP);
     let dest = if app.file_name() != renamed.file_name() && !renamed.exists() { renamed } else { app.to_path_buf() };
     if std::env::var_os("YTM_UPDATE_DRYRUN").is_some() {

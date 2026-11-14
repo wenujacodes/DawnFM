@@ -43,9 +43,6 @@ jobs:
         run: |
           sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out
           sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out-portable portable
-          # For Dusk FM 2.1.0's updater, which looks for "Dusk FM.app" running "duskfm".
-          APP_NAME="Dusk FM" EXEC=duskfm sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out-legacy
-          APP_NAME="Dusk FM" EXEC=duskfm sh macos/bundle.sh target/release/dawnfm "${{ steps.version.outputs.value }}" out-legacy-portable portable
 
       # The app's updater looks for these exact names (asset_name in src/update.rs).
       - name: Package .dmg and .zip
@@ -58,13 +55,6 @@ jobs:
           cp -R "out/Dawn FM.app" dmg/
           ln -s /Applications dmg/Applications
           hdiutil create -volname "Dawn FM" -srcfolder dmg -ov -format UDZO "dist/$name.dmg"
-          # The same app, packed the way Dusk FM 2.1.0's updater expects (its file names and
-          # bundle name); it installs Dawn FM, which renames itself on its next update.
-          old="DuskFM-$v-macos-${{ matrix.arch }}"
-          mkdir -p dmg-legacy
-          cp -R "out-legacy/Dusk FM.app" dmg-legacy/
-          hdiutil create -volname "Dusk FM" -srcfolder dmg-legacy -ov -format UDZO "dist/$old.dmg"
-          ditto -c -k --keepParent "out-legacy-portable/Dusk FM.app" "dist/$old-portable.zip"
           ls -lh dist
 
       - uses: actions/upload-artifact@v7
@@ -95,7 +85,6 @@ jobs:
             echo
             echo "- **Apple Silicon** (M1 and newer): \`arm64\` · **Intel**: \`x64\`"
             echo "- \`.dmg\`: drag Dawn FM to Applications. \`-portable.zip\`: keeps its settings in a folder beside the app."
-            echo "- \`DuskFM-…\` files: only for updating from Dusk FM; download the \`DawnFM-…\` ones."
             echo
             echo "## Changes"
             if [ -n "$prev" ]; then git log --no-merges --pretty='- %s' "$prev..$GITHUB_REF_NAME"; else echo "- First release"; fi

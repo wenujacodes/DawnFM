@@ -25,7 +25,7 @@ pub fn parse(arg: &str) -> Option<String> {
     let arg = arg.trim().trim_matches('"');
     let (scheme, rest) = arg.split_once("://")?;
     let rest = rest.split('#').next().unwrap_or("");
-    if ["dawnfm", "duskfm", "ytm-rs"].iter().any(|s| scheme.eq_ignore_ascii_case(s)) {
+    if ["dawnfm", "ytm-rs"].iter().any(|s| scheme.eq_ignore_ascii_case(s)) {
         // `jam/CODE`, `jam/CODE/`, or `jam/?c=CODE`.
         let (path, query) = rest.split_once('?').unwrap_or((rest, ""));
         let path = path.trim_end_matches('/');
@@ -202,7 +202,7 @@ mod mac {
         }
         // Both registrations hold a plain pointer: keep the handler for the whole run.
         std::mem::forget(handler);
-        log::info!("deeplink: listening for dawnfm:, duskfm: and ytm-rs: links");
+        log::info!("deeplink: listening for dawnfm: and ytm-rs: links");
     }
 
     /// Hand `url` to a handler as macOS would: a GURL event with the URL as its direct object.

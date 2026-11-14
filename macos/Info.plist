@@ -28,7 +28,6 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>dawnfm</string>
-				<string>duskfm</string>
 				<string>ytm-rs</string>
 			</array>
 		</dict>

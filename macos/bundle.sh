@@ -16,8 +16,7 @@ icon="$here/../assets/icon/icon.png"
 appicons_root="$here/../AppIcons"
 iconset_26="$here/../assets/icon/AppIcon_macos26.iconset"
 iconset_under26="$here/../assets/icon/AppIcon.iconset"
-# APP_NAME and EXEC rename the bundle and its binary: releases also carry a copy named as
-# Dusk FM was ("Dusk FM.app" running "duskfm"), which Dusk FM 2.1.0's updater looks for.
+# APP_NAME and EXEC allow customizing the bundle name and binary name if needed.
 name=${APP_NAME:-Dawn FM}
 exec_name=${EXEC:-dawnfm}
 app="$out/$name.app"

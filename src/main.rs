@@ -253,8 +253,8 @@ fn init_logging() {
 
 /// The app's folder in Application Support, and the one it had before the rename.
 pub const DATA_NAME: &str = "DawnFM";
-/// Earlier names of that folder, newest first: Dusk FM, then BitChord's.
-const OLD_DATA_NAMES: [&str; 2] = ["DuskFM", "ytm-rs"];
+/// Earlier names of that folder.
+const OLD_DATA_NAMES: [&str; 1] = ["ytm-rs"];
 
 /// Settings, caches and the sign-in: `data` beside the portable build's exe, else the
 /// user's app data. Dev hook: YTM_DATA_DIR runs on a separate profile.

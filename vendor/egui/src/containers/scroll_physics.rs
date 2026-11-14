@@ -27,16 +27,16 @@ const TOUCH_MAX_STRETCH: f32 = 1.0;
 /// Trackpad scroll deltas are accelerated by the OS, so the fingers move much less
 /// than the deltas suggest. We also want to match the tight feel of native macOS,
 /// so the content follows the fingers a lot less than on a touch screen.
-// Dusk FM: a lighter pull past the edge than egui's 0.3.
+// Dawn FM: a lighter pull past the edge than egui's 0.3.
 const TRACKPAD_RUBBER_BAND_SLOPE: f32 = 0.18;
 
 /// How far past the edge a trackpad scroll can stretch, as a fraction of the viewport.
-// Dusk FM: a small give at the ends (egui's is a third of the view).
+// Dawn FM: a small give at the ends (egui's is a third of the view).
 const TRACKPAD_MAX_STRETCH: f32 = 0.05;
 
 /// Time constant of the critically damped spring that pulls the content back to the edge,
 /// in seconds. It settles in roughly five time constants.
-// Dusk FM: springs back a little quicker (egui: 0.1 s).
+// Dawn FM: springs back a little quicker (egui: 0.1 s).
 const RUBBER_BAND_TIME: f32 = 0.08;
 
 /// The valid range of scroll offsets along one axis.

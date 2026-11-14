@@ -7,8 +7,8 @@
 use std::path::Path;
 
 const SERVICE: &str = "DawnFM";
-/// The Keychain names the sign-ins were saved under before, newest first.
-const OLD_SERVICES: [&str; 2] = ["DuskFM", "ytm-rs"];
+/// The Keychain names the sign-ins were saved under before.
+const OLD_SERVICES: [&str; 1] = ["ytm-rs"];
 
 /// The credential names for `name`, scoped to the data folder when it isn't the
 /// default one (`YTM_DATA_DIR` dev profiles, tests), so those never share or touch
