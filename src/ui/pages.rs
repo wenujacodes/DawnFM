@@ -1230,7 +1230,11 @@ fn settings_updates(app: &mut App, ui: &mut Ui) {
         setting_row(ui, &format!("Dawn FM {version}"), Some(&status), |ui| {
             match &state {
                 State::Ready { .. } => restart = pill(ui, "Restart to Update", Some(icon::SPARKLES), true).clicked(),
-                State::Checking | State::Downloading { .. } => {
+                State::Downloading { percent, .. } => {
+                    let progress = (*percent as f32 / 100.0).clamp(0.0, 1.0);
+                    ui.add(egui::ProgressBar::new(progress).desired_width(120.0).show_percentage());
+                }
+                State::Checking => {
                     ui.spinner();
                 }
                 _ => {
