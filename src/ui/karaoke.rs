@@ -1216,11 +1216,17 @@ impl View {
                 let words: Vec<(&Word, f32)> = b.words.iter().map(|w| (w, if w.bg { dim * 0.78 } else { dim })).chain(deco_words).collect();
                 // The romanization pill is part of the line, so it's blurred with it.
                 let pills: Vec<(Rect, f32)> = b.decos.iter().filter(|d| d.pill).map(|d| (d.rect, cfg.rem())).collect();
+                let mut rendered = false;
                 if let Some((tex, rr, uv)) = self.glow.blurred_line(&ctx, (f.key, i), r, &words, &texts, &pills, scale, atlas, ppp) {
                     // Rendered at the line's scale; snapped so it lands 1:1 on screen pixels.
                     let to = xf.rect(rr);
                     let snapped = (to.min.to_vec2() * ppp).round() / ppp;
                     painter.image(tex, to.translate(snapped - to.min.to_vec2()), uv, theme::with_alpha(cfg.base, opacity));
+                    rendered = true;
+                }
+                if !rendered {
+                    let lit = LitState::new(&cfg, st, t, f.now, sung_now || st.selected);
+                    paint_words(&painter, &ctx, &cfg, &b.words, &b.groups, &xf, &lit, dim, opacity, atlas, &mut glow_work, (f.key, i, 0));
                 }
                 animating |= st.exit.is_some();
             } else {
@@ -1363,6 +1369,7 @@ impl View {
                     self.shifts[i].push(Shift { start: now, delta });
                 }
             }
+            self.glow.lines.clear();
         } else {
             let mut glow = std::mem::take(&mut self.glow);
             glow.reset();
@@ -1701,6 +1708,7 @@ fn wobble(e: f64) -> (f32, f32) {
 struct GlyphQuad {
     rect: Rect,
     uv: Rect,
+    raw_uv: [u16; 4],
     /// Letter index and count, for the letter-space gradient.
     letter: usize,
     letters: usize,
@@ -1742,11 +1750,12 @@ fn word_glyphs(ctx: &egui::Context, w: &Word, lit: &LitState, cfg: &Cfg, wob: Op
                 let f = |x: f32| cx + (x - cx) * sx + tx;
                 r = Rect::from_x_y_ranges(f(r.left())..=f(r.right()), r.y_range());
             }
+            let raw_uv = [uv.min[0], uv.min[1], uv.max[0], uv.max[1]];
             let uvr = Rect::from_min_max(
                 pos2(uv.min[0] as f32 / atlas[0] as f32, uv.min[1] as f32 / atlas[1] as f32),
                 pos2(uv.max[0] as f32 / atlas[0] as f32, uv.max[1] as f32 / atlas[1] as f32),
             );
-            out.push(GlyphQuad { rect: r, uv: uvr, letter: idx, letters: n });
+            out.push(GlyphQuad { rect: r, uv: uvr, raw_uv, letter: idx, letters: n });
         }
     }
     out
@@ -1864,7 +1873,7 @@ fn paint_words(
             let r = xf.rect(q.rect);
             let (alpha, cuts) = lit_gradient(&r, q.letter, q.letters, word_box, &look, w.letters, w.rtl);
             push_quad(&mut m, r, q.uv, color, alpha.as_ref(), &cuts);
-            screen_quads.push((r, q.uv, q.letter, q.letters, 1.0));
+            screen_quads.push((r, q.raw_uv, q.letter, q.letters, 1.0));
         }
         if look.glow > 0.05 && look.glow_alpha >= GLOW_INVISIBLE && !dev_off("glow") {
             glow.push(GlowJob {
@@ -1891,7 +1900,7 @@ fn paint_words(
 /// A word's drop-shadow to rasterize once this frame's glyphs are known.
 pub struct GlowJob {
     key: (u64, usize, u32, u32),
-    quads: Vec<(Rect, Rect, usize, usize, f32)>,
+    quads: Vec<(Rect, [u16; 4], usize, usize, f32)>,
     word: Rect,
     look: WordLook,
     by_letter: bool,
@@ -1934,8 +1943,9 @@ type LineStep = (i32, i32, u64);
 
 #[derive(Default)]
 struct Glow {
-    /// A copy of the font atlas, refreshed when glyphs we need aren't in it yet.
+    /// A copy of the font atlas, refreshed per pass or when atlas dimensions change.
     atlas: Option<Arc<Coverage>>,
+    atlas_pass: u64,
     textures: HashMap<(u64, usize, u32, u32), (Slot, f64)>,
     /// Per line: its blurred image, the radius (in 1/4 px) and scale (in 1/1000) it was
     /// drawn at, where it goes.
@@ -1947,6 +1957,7 @@ struct Glow {
 impl Glow {
     fn reset(&mut self) {
         self.atlas = None;
+        self.atlas_pass = 0;
         let mut gone: Vec<Slot> = self.textures.drain().map(|(_, (s, _))| s).collect();
         gone.extend(self.lines.drain().map(|(_, (s, ..))| s));
         for s in gone {
@@ -1954,19 +1965,22 @@ impl Glow {
         }
     }
 
-    fn atlas(&mut self, ctx: &egui::Context, size: [usize; 2], need: &[Rect]) -> Arc<Coverage> {
+    fn atlas(&mut self, ctx: &egui::Context) -> Arc<Coverage> {
+        let pass = ctx.cumulative_pass_nr();
         let cur_size = ctx.fonts(|f| f.font_image_size());
-        let size = [size[0].max(cur_size[0]), size[1].max(cur_size[1])];
         let stale = match &self.atlas {
             None => true,
-            Some(a) => a.size != size || need.iter().any(|uv| glyph_blank(a, *uv)),
+            Some(a) => self.atlas_pass != pass || a.size != cur_size,
         };
         if stale {
-            // Only the coverage (alpha) is kept: a quarter of the RGBA image egui hands out.
             let img = ctx.fonts(|f| f.image());
-            self.atlas = Some(Arc::new(Coverage { size: img.size, alpha: img.pixels.iter().map(|p| p.a()).collect() }));
+            self.atlas = Some(Arc::new(Coverage {
+                size: img.size,
+                alpha: img.pixels.iter().map(|p| p.a()).collect(),
+            }));
+            self.atlas_pass = pass;
         }
-        self.atlas.clone().unwrap()
+        self.atlas.as_ref().unwrap().clone()
     }
 
     /// Puts `img` in a texture: `old` if it fits, else a spare one that does, else a new one.
@@ -2020,13 +2034,10 @@ impl Glow {
         self.spare.push(s);
     }
 
-    fn finish(&mut self, ctx: &egui::Context, painter: &egui::Painter, jobs: Vec<GlowJob>, atlas_size: [usize; 2], ppp: f32) {
+    fn finish(&mut self, ctx: &egui::Context, painter: &egui::Painter, jobs: Vec<GlowJob>, _atlas_size: [usize; 2], ppp: f32) {
         let now = ctx.input(|i| i.time);
         if !jobs.is_empty() {
-            let cur_size = ctx.fonts(|f| f.font_image_size());
-            let atlas_size = [atlas_size[0].max(cur_size[0]), atlas_size[1].max(cur_size[1])];
-            let uvs: Vec<Rect> = jobs.iter().flat_map(|j| j.quads.iter().map(|q| q.1)).collect();
-            let atlas = self.atlas(ctx, atlas_size, &uvs);
+            let atlas = self.atlas(ctx);
             for j in jobs {
                 let Some((img, rect)) = rasterize_glow(&atlas, &j, ppp, &mut self.scratch) else { continue };
                 let old = self.textures.remove(&j.key).map(|(s, _)| s);
@@ -2058,7 +2069,7 @@ impl Glow {
         texts: &[(Arc<Galley>, Pos2, f32)],
         pills: &[(Rect, f32)],
         scale: f32,
-        atlas_size: [usize; 2],
+        _atlas_size: [usize; 2],
         ppp: f32,
     ) -> Option<(TextureId, Rect, Rect)> {
         if dev_off("blur") {
@@ -2083,16 +2094,8 @@ impl Glow {
                 (g, w.pos, *weight)
             })
             .collect();
-        let cur_atlas_size = ctx.fonts(|fv| fv.font_image_size());
-        let atlas_size = [atlas_size[0].max(cur_atlas_size[0]), atlas_size[1].max(cur_atlas_size[1])];
-        let uv_of = |min: [u16; 2], max: [u16; 2]| {
-            Rect::from_min_max(
-                pos2(min[0] as f32 / atlas_size[0] as f32, min[1] as f32 / atlas_size[1] as f32),
-                pos2(max[0] as f32 / atlas_size[0] as f32, max[1] as f32 / atlas_size[1] as f32),
-            )
-        };
         let mut quads = Vec::new();
-        let push_galley = |g: &Galley, origin: Pos2, weight: f32, quads: &mut Vec<(Rect, Rect, usize, usize, f32)>| {
+        let push_galley = |g: &Galley, origin: Pos2, weight: f32, quads: &mut Vec<(Rect, [u16; 4], usize, usize, f32)>| {
             for row in &g.rows {
                 for gl in &row.row.glyphs {
                     let uv = gl.uv_rect;
@@ -2100,7 +2103,7 @@ impl Glow {
                         continue;
                     }
                     let r = Rect::from_min_size(origin + row.pos.to_vec2() + gl.pos.to_vec2() + uv.offset, uv.size);
-                    quads.push((r, uv_of(uv.min, uv.max), 0, 1, weight));
+                    quads.push((r, [uv.min[0], uv.min[1], uv.max[0], uv.max[1]], 0, 1, weight));
                 }
             }
         };
@@ -2113,8 +2116,7 @@ impl Glow {
         if quads.is_empty() {
             return None;
         }
-        let uvs: Vec<Rect> = quads.iter().map(|q| q.1).collect();
-        let atlas = self.atlas(ctx, atlas_size, &uvs);
+        let atlas = self.atlas(ctx);
         let bounds = quads.iter().fold(Rect::NOTHING, |a, q| a.union(q.0));
         let job = GlowJob {
             key: (0, 0, 0, 0),
@@ -2138,27 +2140,10 @@ impl Glow {
     }
 }
 
-/// Whether a glyph's texels are all empty in our atlas copy (it was added since).
 /// The font atlas's coverage, one byte per texel.
 struct Coverage {
     size: [usize; 2],
     alpha: Vec<u8>,
-}
-
-fn glyph_blank(a: &Coverage, uv: Rect) -> bool {
-    let (w, h) = (a.size[0] as f32, a.size[1] as f32);
-    let (x0, y0, x1, y1) = ((uv.left() * w) as usize, (uv.top() * h) as usize, (uv.right() * w) as usize, (uv.bottom() * h) as usize);
-    if x1 <= x0 || y1 <= y0 || x1 > a.size[0] || y1 > a.size[1] {
-        return true;
-    }
-    for y in y0..y1 {
-        for x in x0..x1 {
-            if a.alpha[y * a.size[0] + x] > 0 {
-                return false;
-            }
-        }
-    }
-    true
 }
 
 /// The lit glyph pixels (coverage × gradient) blurred: CSS `drop-shadow(0 0 r color)`
@@ -2182,13 +2167,12 @@ fn rasterize_glow(atlas: &Coverage, j: &GlowJob, ppp: f32, scratch: &mut Vec<f32
     for &(r, radius) in &j.pills {
         paint_pill(scratch, w, h, (r.min - origin) * ppp, r.size() * ppp, radius * ppp, ppp);
     }
-    let (aw, ah) = (atlas.size[0] as f32, atlas.size[1] as f32);
-    for &(r, uv, letter, letters, weight) in &j.quads {
+    for &(r, raw_uv, letter, letters, weight) in &j.quads {
         let (alpha, _) = lit_gradient(&r, letter, letters, j.word, &j.look, j.by_letter, j.rtl);
-        let tx0 = (uv.left() * aw).round() as isize;
-        let ty0 = (uv.top() * ah).round() as isize;
-        let tw = ((uv.right() - uv.left()) * aw).round() as isize;
-        let th = ((uv.bottom() - uv.top()) * ah).round() as isize;
+        let tx0 = raw_uv[0] as isize;
+        let ty0 = raw_uv[1] as isize;
+        let tw = (raw_uv[2] - raw_uv[0]) as isize;
+        let th = (raw_uv[3] - raw_uv[1]) as isize;
         if tw <= 0 || th <= 0 {
             continue;
         }
@@ -2205,7 +2189,12 @@ fn rasterize_glow(atlas: &Coverage, j: &GlowJob, ppp: f32, scratch: &mut Vec<f32
             if x < 0 || y < 0 || x >= tw || y >= th {
                 return 0.0;
             }
-            atlas.alpha.get((ty0 + y) as usize * atlas.size[0] + (tx0 + x) as usize).map_or(0.0, |&p| p as f32 / 255.0)
+            let px = (tx0 + x) as usize;
+            let py = (ty0 + y) as usize;
+            if px >= atlas.size[0] || py >= atlas.size[1] {
+                return 0.0;
+            }
+            atlas.alpha.get(py * atlas.size[0] + px).map_or(0.0, |&p| p as f32 / 255.0)
         };
         for y in iy0..iy1 {
             let fy = (y as f32 + 0.5 - dy0) / dh * th as f32 - 0.5;
