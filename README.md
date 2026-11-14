@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/icon/icon.png" width="128" alt="Dawn FM icon">
   <h1>Dawn FM</h1>
-  <p><strong>A fast, lightweight, native YouTube Music player for macOS — built in Rust.</strong></p>
+  <p><strong>A fast, lightweight, native YouTube Music player for macOS</strong></p>
   <p>No Electron, no web wrapper. Ultra-light on memory, instant playback, and native design.</p>
 
   <p>
@@ -11,12 +11,7 @@
     <a href="LICENSE"><img src="https://img.shields.io/github/license/wenujacodes/DawnFM?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
   </p>
 
-  <p>
-    <a href="https://github.com/wenujacodes/DawnFM/releases/latest"><b>Download (.dmg)</b></a> ·
-    <a href="#features">Features</a> ·
-    <a href="#privacy">Privacy</a> ·
-    <a href="#building-from-source">Build</a>
-  </p>
+
 
   <p>⭐ <em>Star the repo to help others discover Dawn FM!</em></p>
 </div>
@@ -27,8 +22,8 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/readme/screenshot-1.png" alt="Full player with artwork and lyrics"></td>
-    <td width="50%"><img src="docs/readme/screenshot-2.png" alt="Browse view with shelves"></td>
+    <td width="50%"><img src="docs/readme/screenshot-1.jpeg" alt="Full player with artwork and lyrics"></td>
+    <td width="50%"><img src="docs/readme/screenshot-2.jpeg" alt="Browse view with shelves"></td>
   </tr>
   <tr>
     <td align="center"><b>Player</b> — artwork, synced lyrics & controls</td>
