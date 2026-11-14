@@ -76,7 +76,7 @@ You need the [Rust toolchain](https://rustup.rs/).
 git clone https://github.com/wenujacodes/DawnFM.git
 cd DawnFM
 cargo build --release
-macos/bundle.sh target/release/dawnfm 2.1.0 out
+macos/bundle.sh target/release/dawnfm 2.2.0 out
 ```
 
 This makes `out/Dawn FM.app` for your Mac's architecture (Apple Silicon or Intel).
