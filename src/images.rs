@@ -17,9 +17,9 @@ use crate::backend::Backend;
 const RETRY_AFTER: Duration = Duration::from_secs(30);
 /// Thumbnails up to this size are also kept on disk, so the next launch shows them at
 /// once (the account picture, playlist covers, the home feed).
-const DISK_MAX_FILE: usize = 256 * 1024;
+const DISK_MAX_FILE: usize = 4 * 1024 * 1024;
 /// The disk cache is trimmed to this, oldest first, at launch.
-const DISK_BUDGET: u64 = 64 * 1024 * 1024;
+const DISK_BUDGET: u64 = 256 * 1024 * 1024;
 
 enum Entry {
     Pending,
