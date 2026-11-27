@@ -229,6 +229,7 @@ impl App {
         self.audio.send(crate::audio::AudioCmd::Stop);
         self.exiting = true;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        ctx.request_repaint();
     }
 
     /// On macOS, clicking the window close button hides the window to the background

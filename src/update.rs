@@ -441,6 +441,7 @@ fn replace_bundle(new: &Path, app: &Path, bin_name: Option<&std::ffi::OsStr>, re
         log::warn!("update: couldn't copy {} beside {}", new.display(), app.display());
         return false;
     }
+    let _ = std::process::Command::new("xattr").args(["-cr"]).arg(&tmp).status();
     if let Err(e) = std::fs::rename(app, &old) {
         let _ = std::fs::remove_dir_all(&tmp);
         log::warn!("update: couldn't move {} aside: {e}", app.display());
@@ -470,8 +471,9 @@ fn relaunch_unix_exe(exe: &Path) {
     let pid = std::process::id();
     let quoted = shell_quote(exe);
     run_detached(&format!(
-        "i=0; while kill -0 {pid} 2>/dev/null && [ $i -lt 150 ]; do sleep 0.1; i=$((i+1)); done; \
-         sleep 0.1; \
+        "i=0; while kill -0 {pid} 2>/dev/null && [ $i -lt 200 ]; do sleep 0.1; i=$((i+1)); done; \
+         if kill -0 {pid} 2>/dev/null; then kill -TERM {pid} 2>/dev/null || true; sleep 0.5; fi; \
+         sleep 0.3; \
          exec '{quoted}' {}",
         crate::deeplink::RELAUNCH_FLAG,
     ));
@@ -480,19 +482,31 @@ fn relaunch_unix_exe(exe: &Path) {
 #[cfg(target_os = "macos")]
 fn bundle_relaunch_script(app: &Path, bin_name: Option<&std::ffi::OsStr>, pid: u32) -> String {
     let bundle = shell_quote(app);
-    let bin = app
-        .join("Contents/MacOS")
-        .join(bin_name.filter(|s| !s.is_empty()).unwrap_or_else(|| std::ffi::OsStr::new("dawnfm")));
+    let leaf = bin_name.filter(|s| !s.is_empty()).unwrap_or_else(|| std::ffi::OsStr::new("dawnfm"));
+    let bin = app.join("Contents/MacOS").join(leaf);
     let bin = shell_quote(&bin);
+    let proc_name = shell_quote(Path::new(leaf));
     let flag = crate::deeplink::RELAUNCH_FLAG;
     // Wait until the exiting process is completely gone before calling LaunchServices:
     // `open` without `-n` activates the dying instance instead of launching the new one,
-    // and launching too early can race with persistence writes or LaunchServices deregistration.
+    // and launching too early can race with persistence writes or LaunchServices teardown
+    // of a freshly replaced bundle. Retry while verifying a new process actually started.
     format!(
-        "i=0; while kill -0 {pid} 2>/dev/null && [ $i -lt 150 ]; do sleep 0.1; i=$((i+1)); done; \
-         sleep 0.2; \
-         xattr -dr com.apple.quarantine '{bundle}' 2>/dev/null || true; \
-         open -n '{bundle}' --args {flag} || {{ sleep 0.5; open -n '{bundle}' --args {flag}; }} || exec '{bin}' {flag} >/dev/null 2>&1"
+        "i=0; while kill -0 {pid} 2>/dev/null && [ $i -lt 200 ]; do sleep 0.1; i=$((i+1)); done; \
+         if kill -0 {pid} 2>/dev/null; then kill -TERM {pid} 2>/dev/null || true; sleep 0.5; fi; \
+         sleep 0.5; \
+         xattr -cr '{bundle}' 2>/dev/null || xattr -dr com.apple.quarantine '{bundle}' 2>/dev/null || true; \
+         /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f '{bundle}' >/dev/null 2>&1 || true; \
+         launched=0; j=0; \
+         while [ $j -lt 5 ]; do \
+             if open -n '{bundle}' --args {flag} >/dev/null 2>&1; then \
+                 sleep 0.6; \
+                 if pgrep -x '{proc_name}' 2>/dev/null | grep -vq '^{pid}$'; then launched=1; break; fi; \
+             fi; \
+             sleep 0.5; \
+             j=$((j+1)); \
+         done; \
+         [ $launched -eq 1 ] || open '{bundle}' --args {flag} >/dev/null 2>&1 || exec '{bin}' {flag} >/dev/null 2>&1"
     )
 }
 
@@ -673,7 +687,10 @@ mod tests {
     fn bundle_relaunch_waits_for_pid_uses_new_instance_and_falls_back_to_binary() {
         let s = super::bundle_relaunch_script(std::path::Path::new("/Applications/Dawn FM.app"), None, 4242);
         assert!(s.contains("kill -0 4242"));
+        assert!(s.contains("lsregister -f '/Applications/Dawn FM.app'"));
+        assert!(s.contains("pgrep -x 'dawnfm'"));
         assert!(s.contains("open -n '/Applications/Dawn FM.app' --args --relaunch"));
         assert!(s.contains("exec '/Applications/Dawn FM.app/Contents/MacOS/dawnfm' --relaunch"));
+        assert!(std::process::Command::new("sh").args(["-n", "-c", &s]).status().unwrap().success());
     }
 }
