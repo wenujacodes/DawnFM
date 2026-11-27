@@ -582,15 +582,14 @@ fn cover_column(app: &mut App, ui: &mut Ui, col: Rect, track: &crate::model::Tra
         ui.painter().add(s.as_shape(art, cr));
     }
     if cs.shadow > 0.0 {
-        let shadow_val = cs.shadow.max(0.4);
+        let shadow_val = cs.shadow.clamp(0.0, 1.0);
         let bg_light = app.bg_is_light();
         let (blur, alpha) = if bg_light {
-            (28.0, (shadow_val * 0.35).clamp(0.08, 0.22))
+            (26.0, (shadow_val * 0.18).clamp(0.05, 0.14))
         } else {
-            (48.0, (shadow_val * 0.75).clamp(0.30, 0.60))
+            (40.0, (shadow_val * 0.36).clamp(0.10, 0.25))
         };
         widgets::soft_shadow(ui, art, radius.min(255.0), blur, alpha);
-        widgets::soft_shadow(ui, art, radius.min(255.0), blur * 0.45, alpha * 0.75);
     }
     let tint = Color32::from_gray((cs.brightness.clamp(0.1, 1.0) * 255.0) as u8);
     if round {
