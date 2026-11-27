@@ -87,8 +87,9 @@ pub enum LibTab {
     History,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum NpTab {
+    #[default]
     Lyrics,
     UpNext,
     /// Neither panel: just the artwork.

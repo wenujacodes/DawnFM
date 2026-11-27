@@ -15,6 +15,8 @@ pub fn overlay(app: &mut App, ctx: &egui::Context, now: f64, screen: Rect) {
     use crate::preset::BgMode;
     let t = theme::anim_bool(ctx, "np-open", app.np_open && app.current().is_some(), 0.42);
     if t <= 0.001 {
+        let no_lyrics = app.no_lyrics();
+        reset_overlay_panel_state(ctx, &mut app.np_tab, app.np_open, no_lyrics);
         return;
     }
     // The player brings its own transport, so it takes the whole window: the capsule
@@ -134,13 +136,13 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     }
 
     // The side panel (lyrics / up next) slides in and out when its chip is toggled.
-    let last_id = egui::Id::unique("np-last-panel");
-    let panel_tab = if app.np_tab == NpTab::Art {
-        ui.ctx().data(|d| d.get_temp(last_id)).unwrap_or(if no_lyrics { NpTab::UpNext } else { NpTab::Lyrics })
-    } else {
-        ui.ctx().data_mut(|d| d.insert_temp(last_id, app.np_tab));
-        app.np_tab
-    };
+    // Linear 0..1 over the transition; each part eases its own slice of it.
+    let shown = ui.ctx().animate_bool_with_time(egui::Id::unique("np-panel"), app.np_tab != NpTab::Art, 0.6 * theme::SPEED);
+    if shown > 0.0 && shown < 1.0 {
+        // Every frame while sliding, not the now-playing view's usual 30 fps.
+        super::animate(ui.ctx());
+    }
+    let (panel_tab, was_vis, prev_app_tab) = panel_transition_state(ui.ctx(), app.np_tab, shown, no_lyrics);
     let fullbleed_lyrics_view = !no_lyrics && cs.layout == Layout::LyricsOnly && look.background.mode == crate::preset::BgMode::CoverFullbleed;
     let split_queue = !narrow && !fullbleed_lyrics_view && (app.np_tab == NpTab::UpNext || panel_tab == NpTab::UpNext);
     let beside = !narrow && cs.layout == Layout::LyricsOnly && !split_queue && look.background.mode == crate::preset::BgMode::CoverFullbleed;
@@ -149,12 +151,6 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
     let mut close = false;
 
     let content = Rect::from_min_max(pos2(area.left() + 32.0, header.bottom() + 12.0), pos2(area.right() - 32.0, area.bottom() - 24.0));
-    // Linear 0..1 over the transition; each part eases its own slice of it.
-    let shown = ui.ctx().animate_bool_with_time(egui::Id::unique("np-panel"), app.np_tab != NpTab::Art, 0.6 * theme::SPEED);
-    if shown > 0.0 && shown < 1.0 {
-        // Every frame while sliding, not the now-playing view's usual 30 fps.
-        super::animate(ui.ctx());
-    }
     let ppp = ui.ctx().pixels_per_point();
     let p = if panel_tab == NpTab::Lyrics && no_lyrics { 0.0 } else { shown };
     // Whichever is leaving slides and fades out over the first 45%, then the other
@@ -259,7 +255,14 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
             Rect::from_min_max(pos2(col_panel.right() + 28.0, content.top()), content.max)
         }
     };
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("np-panel-was-vis"), panel_vis > 0.001));
     if panel_vis > 0.001 {
+        // Only crossfade between Lyrics and Queue when switching directly from the other open tab;
+        // opening after a panel was closed/Art snaps straight to the chosen tab without flashing
+        // whatever panel had been closed earlier.
+        if app.np_tab != NpTab::Art && (!was_vis || prev_app_tab == Some(NpTab::Art)) {
+            snap_panel_tab_anims(ui.ctx(), panel_tab);
+        }
         let toward = if !lyrics_only && cs.side == Side::Right { -slide } else { slide };
         let rect = right.translate(vec2(toward * (1.0 - panel_vis), 0.0));
         // Switching between Lyrics and Up next: the old one fades out over the first 55%,
@@ -288,6 +291,8 @@ fn body(app: &mut App, ui: &mut Ui, now: f64) {
                 _ => super::shell::queue_list(app, &mut rui, "np"),
             }
         }
+    } else {
+        reset_panel_tab_anims(ui.ctx());
     }
 
     // Narrow / iPad-style panel mode: overlay player controls at the bottom over lyrics/queue
@@ -1622,4 +1627,119 @@ fn mini_text(ui: &mut Ui, text: &str, on: bool, tip: &str) -> egui::Response {
 
 fn lang_name(code: &str) -> &str {
     super::lyric_prefs::LANGUAGES.iter().find(|(c, _)| *c == code).map_or(code, |(_, n)| n)
+}
+
+fn snap_panel_tab_anims(ctx: &egui::Context, active: NpTab) {
+    ctx.animate_bool_with_time(egui::Id::unique("np-tab-lyrics"), active == NpTab::Lyrics, 0.0);
+    ctx.animate_bool_with_time(egui::Id::unique("np-tab-upnext"), active == NpTab::UpNext, 0.0);
+}
+
+fn reset_panel_tab_anims(ctx: &egui::Context) {
+    snap_panel_tab_anims(ctx, NpTab::Art);
+}
+
+fn panel_transition_state(ctx: &egui::Context, np_tab: NpTab, shown: f32, no_lyrics: bool) -> (NpTab, bool, Option<NpTab>) {
+    let last_id = egui::Id::unique("np-last-panel");
+    let vis_id = egui::Id::unique("np-panel-was-vis");
+    let prev_id = egui::Id::unique("np-prev-tab");
+    let was_vis = ctx.data(|d| d.get_temp::<bool>(vis_id)).unwrap_or(false);
+    let prev_app_tab = ctx.data(|d| d.get_temp::<NpTab>(prev_id));
+    ctx.data_mut(|d| d.insert_temp(prev_id, np_tab));
+    let fallback = if no_lyrics { NpTab::UpNext } else { NpTab::Lyrics };
+    let panel_tab = if np_tab == NpTab::Art {
+        if shown <= 0.001 {
+            ctx.data_mut(|d| d.remove_temp::<NpTab>(last_id));
+            fallback
+        } else {
+            ctx.data(|d| d.get_temp(last_id)).unwrap_or(fallback)
+        }
+    } else {
+        ctx.data_mut(|d| d.insert_temp(last_id, np_tab));
+        np_tab
+    };
+    (panel_tab, was_vis, prev_app_tab)
+}
+
+fn reset_overlay_panel_state(ctx: &egui::Context, np_tab: &mut NpTab, np_open: bool, no_lyrics: bool) {
+    let last_id = egui::Id::unique("np-last-panel");
+    let vis_id = egui::Id::unique("np-panel-was-vis");
+    let prev_id = egui::Id::unique("np-prev-tab");
+    let prior_id = egui::Id::unique("np-last-tab-prior");
+    if !np_open && *np_tab == NpTab::UpNext {
+        let prior = ctx.data(|d| d.get_temp::<NpTab>(prior_id));
+        *np_tab = match prior {
+            Some(NpTab::Art) => NpTab::Art,
+            _ => if no_lyrics { NpTab::Art } else { NpTab::Lyrics },
+        };
+    }
+    ctx.data_mut(|d| {
+        d.remove_temp::<NpTab>(last_id);
+        d.remove_temp::<bool>(vis_id);
+        d.remove_temp::<NpTab>(prev_id);
+        d.remove_temp::<NpTab>(prior_id);
+    });
+    ctx.animate_bool_with_time(egui::Id::unique("np-panel"), *np_tab != NpTab::Art, 0.0);
+    reset_panel_tab_anims(ctx);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opening_lyrics_after_closing_queue_does_not_flash_queue() {
+        let ctx = egui::Context::default();
+        // Seed queue as having been opened and its animation still at 1.0, then closed (`shown = 0`).
+        let _ = panel_transition_state(&ctx, NpTab::UpNext, 1.0, false);
+        snap_panel_tab_anims(&ctx, NpTab::UpNext);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("np-panel-was-vis"), true));
+
+        // Finish closing queue to Art (`shown = 0.0`).
+        let _ = panel_transition_state(&ctx, NpTab::Art, 0.0, false);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("np-panel-was-vis"), false));
+        reset_panel_tab_anims(&ctx);
+
+        // Now click Lyrics: previously closed Queue must stay at 0.0 while Lyrics snaps to 1.0.
+        let (panel_tab, was_vis, prev_app_tab) = panel_transition_state(&ctx, NpTab::Lyrics, 0.5, false);
+        assert_eq!(panel_tab, NpTab::Lyrics);
+        assert!(!was_vis);
+        assert_eq!(prev_app_tab, Some(NpTab::Art));
+        snap_panel_tab_anims(&ctx, panel_tab);
+
+        let w_lyr = ctx.animate_bool_with_time(egui::Id::unique("np-tab-lyrics"), true, 0.45);
+        let w_q = ctx.animate_bool_with_time(egui::Id::unique("np-tab-upnext"), false, 0.45);
+        assert_eq!(w_lyr, 1.0);
+        assert_eq!(w_q, 0.0);
+    }
+
+    #[test]
+    fn switching_from_art_mid_close_snaps_without_showing_closed_queue() {
+        let ctx = egui::Context::default();
+        let _ = panel_transition_state(&ctx, NpTab::UpNext, 1.0, false);
+        snap_panel_tab_anims(&ctx, NpTab::UpNext);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("np-panel-was-vis"), true));
+
+        // User closes Queue (`Art`), and clicks Lyrics before the fade-out finishes.
+        let _ = panel_transition_state(&ctx, NpTab::Art, 0.7, false);
+        let (panel_tab, _, prev_app_tab) = panel_transition_state(&ctx, NpTab::Lyrics, 0.75, false);
+        assert_eq!(prev_app_tab, Some(NpTab::Art));
+        if prev_app_tab == Some(NpTab::Art) {
+            snap_panel_tab_anims(&ctx, panel_tab);
+        }
+
+        let w_q = ctx.animate_bool_with_time(egui::Id::unique("np-tab-upnext"), false, 0.45);
+        assert_eq!(w_q, 0.0);
+    }
+
+    #[test]
+    fn closing_full_player_forgets_transient_up_next() {
+        let ctx = egui::Context::default();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("np-last-tab-prior"), NpTab::Art));
+        snap_panel_tab_anims(&ctx, NpTab::UpNext);
+
+        let mut tab = NpTab::UpNext;
+        reset_overlay_panel_state(&ctx, &mut tab, false, false);
+        assert_eq!(tab, NpTab::Art);
+        assert_eq!(ctx.animate_bool_with_time(egui::Id::unique("np-tab-upnext"), false, 0.45), 0.0);
+    }
 }
