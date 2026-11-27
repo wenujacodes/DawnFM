@@ -241,6 +241,15 @@ fn animated_section(ui: &mut Ui, id_salt: &str, k: f32, add_contents: impl FnOnc
     ui.ctx().data_mut(|d| d.insert_temp(h_key, measured));
 }
 
+fn is_liked_playlist_card(c: &crate::model::Card) -> bool {
+    let Target::Playlist(id) = &c.target else { return false };
+    id == super::LIKED_MUSIC
+        || id == "LM"
+        || id == "VLLM"
+        || id == crate::spotify::SPOTIFY_LIKED_ID
+        || c.thumbs.iter().any(|t| t.url.contains("/images/pbg/liked-songs"))
+}
+
 /// The sidebar: the search box, the app's pages and the playlists.
 pub fn sidebar(app: &mut App, ui: &mut Ui) {
     const ICON_X: f32 = 24.0;
@@ -456,7 +465,7 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                 };
                 let mut visible: Vec<&crate::model::Card> = playlists
                     .iter()
-                    .filter(|c| !matches!(&c.target, Target::Playlist(id) if app.hidden_playlists.contains(id)))
+                    .filter(|c| !is_liked_playlist_card(c) && !matches!(&c.target, Target::Playlist(id) if app.hidden_playlists.contains(id)))
                     .collect();
                 visible.sort_by_key(|c| match &c.target {
                     Target::Playlist(id) => app.playlist_order.iter().position(|x| x == id).unwrap_or(usize::MAX),
@@ -491,22 +500,8 @@ pub fn sidebar(app: &mut App, ui: &mut Ui) {
                     let selected = matches!(&c.target, Target::Playlist(id) if app.page == Page::Playlist(id.clone()));
                     let lift = if is_dragged { 0.10 } else { 0.0 };
                     ui.painter().rect_filled(rect, look.radius, theme::glass(0.05 * h + if selected { 0.08 } else { 0.0 } + lift));
-                    let is_liked = id == super::LIKED_MUSIC
-                        || id == "LM"
-                        || id == "VLLM"
-                        || id == crate::spotify::SPOTIFY_LIKED_ID
-                        || c.thumbs.iter().any(|t| t.url.contains("/images/pbg/liked-songs"));
-                    if is_liked {
-                        let icon_fg = if selected {
-                            look.accent
-                        } else {
-                            theme::lerp_color(theme::text_dim(), theme::text(), h)
-                        };
-                        icon_at(ui, pos2(rect.left() + ICON_X, rect.center().y), icon::HEART, 15.0, icon_fg);
-                    } else {
-                        let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(22.0));
-                        paint_cover(ui, img, &c.thumbs, theme::thumb_radius(), 1.0);
-                    }
+                    let img = Rect::from_center_size(pos2(rect.left() + ICON_X, rect.center().y), Vec2::splat(22.0));
+                    paint_cover(ui, img, &c.thumbs, theme::thumb_radius(), 1.0);
                     let w = full_w - 54.0;
                     let fg = theme::label();
                     text_at(ui, pos2(rect.left() + 44.0, rect.center().y - 8.5), &c.title, theme::regular(13.0), fg, w);
