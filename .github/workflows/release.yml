@@ -130,22 +130,30 @@ jobs:
 
       - name: Release notes
         run: |
-          prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
-          {
-            echo "Dawn FM is a fast, lightweight native YouTube Music player built in Rust."
-            echo
-            echo "### Windows Installation & SmartScreen"
-            echo "- **Installer**: Run \`DawnFM-${GITHUB_REF_NAME#v}-windows-x64-setup.exe\` to install."
-            echo "- **Portable**: Extract \`DawnFM-${GITHUB_REF_NAME#v}-windows-x64-portable.zip\` and run \`dawnfm.exe\`."
-            echo "- **If blocked by Windows SmartScreen**: Right-click the \`.exe\` or \`.zip\` → **Properties** → check **Unblock** at the bottom → click **OK**."
-            echo
-            echo "## Changes"
-            if [ -n "$prev" ]; then
-              git log --no-merges --pretty='- %s' "$prev..$GITHUB_REF_NAME" | grep -v -E "^- (build:|Bump version)" || echo "- Bug fixes and improvements"
-            else
-              echo "- First release"
-            fi
-          } > notes.md
+          tag_body=""
+          if [ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME" 2>/dev/null)" = "tag" ]; then
+            tag_body=$(git for-each-ref --format='%(contents)' "refs/tags/$GITHUB_REF_NAME")
+          fi
+          if printf '%s' "$tag_body" | grep -q '[^[:space:]]'; then
+            printf '%s\n' "$tag_body" > notes.md
+          else
+            prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+            {
+              echo "Dawn FM is a fast, lightweight native YouTube Music player built in Rust."
+              echo
+              echo "### Windows Installation & SmartScreen"
+              echo "- **Installer**: Run \`DawnFM-${GITHUB_REF_NAME#v}-windows-x64-setup.exe\` to install."
+              echo "- **Portable**: Extract \`DawnFM-${GITHUB_REF_NAME#v}-windows-x64-portable.zip\` and run \`dawnfm.exe\`."
+              echo "- **If blocked by Windows SmartScreen**: Right-click the \`.exe\` or \`.zip\` → **Properties** → check **Unblock** at the bottom → click **OK**."
+              echo
+              echo "## Changes"
+              if [ -n "$prev" ]; then
+                git log --no-merges --pretty='- %s' "$prev..$GITHUB_REF_NAME" | grep -v -E "^- (build:|Bump version)" || echo "- Bug fixes and improvements"
+              else
+                echo "- First release"
+              fi
+            } > notes.md
+          fi
           cat notes.md
 
       - name: Create the release

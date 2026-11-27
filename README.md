@@ -52,7 +52,7 @@ Download the latest version from **[GitHub Releases](https://github.com/wenujaco
 ```sh
 git clone https://github.com/wenujacodes/DawnFM.git && cd DawnFM
 cargo build --release
-sh macos/bundle.sh target/release/dawnfm 2.5.0 out
+sh macos/bundle.sh target/release/dawnfm 2.6.0 out
 ```
 
 ## Credits

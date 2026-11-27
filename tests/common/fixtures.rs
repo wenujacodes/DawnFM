@@ -160,7 +160,7 @@ pub const SAMPLE_ACCOUNT_EMAIL: &str = "listener@dawnfm.test";
 /// Realistic Inno Setup installer script content for verifying Feature 26 (F26).
 pub const SAMPLE_INNO_SETUP_SCRIPT: &str = r#"; Dawn FM Inno Setup Script
 #define MyAppName "Dawn FM"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.6.0"
 #define MyAppPublisher "Dawn FM Team"
 #define MyAppURL "https://github.com/wenujacodes/DawnFM"
 #define MyAppExeName "dawnfm.exe"
