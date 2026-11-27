@@ -2003,8 +2003,8 @@ pub fn collection(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
                 let text_right = if clearable { search_rect.right() - 28.0 } else { search_rect.right() - 12.0 };
                 let text_rect = Rect::from_min_max(pos2(search_rect.left() + 33.0, search_rect.top() + 3.0), pos2(text_right, search_rect.bottom() - 3.0));
                 let placeholder = if is_album { "Find in Album" } else { "Find in Playlist" };
-                let mut edit_ui = ui.new_child(egui::UiBuilder::new().max_rect(text_rect));
-                let edit_resp = edit_ui.add(
+                let edit_resp = ui.put(
+                    text_rect,
                     egui::TextEdit::singleline(&mut current_query)
                         .id(ui.scope_id().with(("coll-search-edit", id)))
                         .hint_text(egui::RichText::new(placeholder).color(theme::text_dim()))
