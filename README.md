@@ -7,6 +7,7 @@
   <p>
     <a href="https://github.com/wenujacodes/DawnFM/releases/latest"><img src="https://img.shields.io/github/v/release/wenujacodes/DawnFM?style=flat-square&color=a855f7&labelColor=0d1117" alt="Latest release"></a>
     <a href="https://github.com/wenujacodes/DawnFM/releases"><img src="https://img.shields.io/github/downloads/wenujacodes/DawnFM/total?style=flat-square&color=a855f7&labelColor=0d1117" alt="All-time Downloads"></a>
+    <a href="https://www.reddit.com/r/MadeByWenuja/"><img src="https://img.shields.io/badge/Reddit-r%2FMadeByWenuja-ff4500?style=flat-square&logo=reddit&logoColor=white&labelColor=0d1117" alt="Reddit: r/MadeByWenuja"></a>
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-333?style=flat-square&labelColor=0d1117" alt="macOS | Windows">
     <a href="LICENSE"><img src="https://img.shields.io/github/license/wenujacodes/DawnFM?style=flat-square&color=333&labelColor=0d1117" alt="License: GPL-3.0"></a>
   </p>
@@ -16,6 +17,7 @@
     <a href="#not-your-typical-music-app">Why Dawn FM</a> ·
     <a href="#more-than-press-play">Audio &amp; Visuals</a> ·
     <a href="#installation">Install</a> ·
+    <a href="#community">Community</a> ·
     <a href="#build-from-source">Build</a>
   </p>
 </div>
@@ -24,8 +26,8 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/readme/screenshot-1.jpeg" alt="Now Playing with Liquid Glass and karaoke lyrics"></td>
-    <td width="50%"><img src="docs/readme/screenshot-2.jpeg" alt="Browse and library view"></td>
+    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.49.43.png" alt="Now Playing with word-synced karaoke lyrics and Kawarp backdrop"></td>
+    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.49.07.png" alt="Album view with Liquid Glass controls and borderless tracklist"></td>
   </tr>
 </table>
 
@@ -68,12 +70,12 @@ Most desktop music players force a compromise. Official apps feel like slow, clu
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/readme/search.jpg" alt="Search and discovery"><br><sub>Dedicated Search, Browse Categories &amp; Top Results</sub></td>
-    <td width="50%"><img src="docs/readme/spotify-transfer.jpg" alt="Built-in Spotify playlist transfer"><br><sub>Built-in Spotify → YouTube Music Transfer</sub></td>
+    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.48.49.png" alt="Home feed with Quick picks and Spotify playlists"><br><sub>Home Feed &amp; Floating Liquid Glass Player</sub></td>
+    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.48.21.png" alt="Search results with Top Results, Artists, and explicit track badges"><br><sub>Search with Top Results &amp; Explicit Track Badges</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/readme/settings-themes.jpg" alt="Theme presets and shader settings"><br><sub>Liquid Glass, Kawarp Shaders &amp; Theme Presets</sub></td>
-    <td width="50%"><img src="docs/readme/listen-together.jpg" alt="Listen Together Jam room"><br><sub>Synced Listen Together Rooms (Jam)</sub></td>
+    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.48.57.png" alt="Spotify Library followed artists view"><br><sub>Spotify Library &amp; Followed Artists</sub></td>
+    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.49.28.png" alt="Full-bleed Now Playing cover view"><br><sub>Immersive Now Playing View</sub></td>
   </tr>
 </table>
 
@@ -98,6 +100,10 @@ cargo build --release
 sh macos/bundle.sh target/release/dawnfm 2.6.0 out
 open "out/Dawn FM.app"
 ```
+
+## Community
+
+Have feedback, feature requests, bug reports, or setups to share? Join the discussion on Reddit at **[r/MadeByWenuja](https://www.reddit.com/r/MadeByWenuja/)**.
 
 ## Credits
 
