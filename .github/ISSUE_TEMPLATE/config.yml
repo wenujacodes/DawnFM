@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Reddit Community (r/MadeByWenuja)
+    url: https://www.reddit.com/r/MadeByWenuja/
+    about: Ask questions, share setups, and discuss Dawn FM ideas with the community.
+  - name: Security Vulnerability Report
+    url: https://github.com/wenujacodes/DawnFM/security/policy
+    about: Do not open public issues for security vulnerabilities — report them privately via email.

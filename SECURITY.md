@@ -44,7 +44,7 @@ To help us assess and resolve the issue quickly, please include:
 ## Out of Scope
 
 The following areas are generally out of scope:
-- Vulnerabilities or infrastructure issues related to third-party services (such as YouTube, YouTube Music, or Google servers).
+- Vulnerabilities or infrastructure issues related to third-party services (such as YouTube, YouTube Music, Google, Spotify, or Apple Music servers).
 - Attacks that require root/administrator privileges or physical access to an already-compromised device.
 - Denial of service attacks against personal devices or network connections.
 - Automated vulnerability scanner reports without a working proof of concept demonstrating practical impact.

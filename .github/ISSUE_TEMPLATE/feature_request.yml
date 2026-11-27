@@ -1,0 +1,21 @@
+name: Feature Request
+description: Suggest an improvement or new capability for Dawn FM
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What would you like Dawn FM to do?
+      description: Describe the feature clearly and concisely.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why would this help desktop listeners?
+      description: Explain how it improves everyday listening, audio, visuals, or platform integration.
+  - type: textarea
+    id: details
+    attributes:
+      label: Additional context or mockups (optional)

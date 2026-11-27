@@ -1,0 +1,60 @@
+name: Bug Report
+description: Report a bug, crash, or UI issue in Dawn FM
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue! Please check existing issues first and never paste cookies, tokens, or account passwords.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows (x64)
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Dawn FM Version
+      placeholder: e.g. 2.6.0
+    validations:
+      required: true
+  - type: dropdown
+    id: service
+    attributes:
+      label: Music Service
+      options:
+        - YouTube Music (signed out)
+        - YouTube Music (signed in)
+        - Spotify
+        - Both / General App
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open...
+        2. Click...
+        3. See error...
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or logs (optional)
+      description: Paste screenshots or redacted log output if helpful.
