@@ -111,8 +111,8 @@ impl App {
                 self.lyric_view.resume();
             }
             Action::Like(t, like) => {
-                if !self.logged_in {
-                    self.toast("Sign in to like songs");
+                if !self.signed_in_for(&t.id) {
+                    self.toast(self.sign_in_prompt_for(&t.id, "like songs", "like this song"));
                     return;
                 }
                 // Optimistic: update the like state and the cached Liked songs list now.
@@ -223,7 +223,7 @@ impl App {
                 }
             }
             Action::SaveCollection(id, save) => {
-                if self.logged_in {
+                if self.signed_in_for(&id) {
                     // Flip the library tick now: the save's round trip, and the library
                     // refresh after it, are far too slow to leave the button stuck.
                     let card = self.lists.get(&id).map(|o| {
@@ -242,8 +242,9 @@ impl App {
                         self.optimistic_save = Some((card, save));
                     }
                     self.backend.request(Req::SaveCollection { id, save });
+                } else {
+                    self.toast(self.sign_in_prompt_for(&id, "save to library", "save this to library"));
                 }
-                else { self.toast("Sign in to save to library"); }
             }
             Action::TogglePin(card) => {
                 if let Some(pos) = self.pinned.iter().position(|c| c.target == card.target) {
@@ -273,7 +274,12 @@ impl App {
             // The account's YouTube subscription to the artist, flipped at once (the
             // round trip is slow) and put back if YouTube Music refuses it.
             Action::SetSubscribed(subscribe) => {
-                if !self.logged_in {
+                let channel = self.artist.as_ref().and_then(|a| a.following.as_ref()).map(|s| s.channel.clone());
+                if let Some(ch) = channel.as_deref()
+                    && !self.signed_in_for(ch)
+                {
+                    self.toast(self.sign_in_prompt_for(ch, "subscribe", "subscribe"));
+                } else if channel.is_none() && !self.active_logged_in() {
                     self.toast("Sign in to subscribe");
                 } else if let Some(sub) = self.artist.as_mut().and_then(|a| a.following.as_mut()) {
                     self.optimistic_sub = Some((sub.channel.clone(), sub.subscribed));

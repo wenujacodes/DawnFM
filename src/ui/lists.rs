@@ -11,6 +11,15 @@ use crate::model::Track;
 /// Liked Music's playlist id.
 pub const LIKED_MUSIC: &str = "LM";
 
+/// Liked Songs playlist id for `id` (Spotify Liked Songs or YouTube Music Liked Music).
+fn liked_list_id(id: &str) -> &'static str {
+    if crate::spotify::is_spotify_id(id) {
+        crate::spotify::SPOTIFY_LIKED_ID
+    } else {
+        LIKED_MUSIC
+    }
+}
+
 /// Going back to a kept album or playlist reloads it when it's older than this. Edits
 /// made here show at once anyway, and a Spotify transfer reloads Liked Music when done.
 const REFRESH_EVERY: Duration = Duration::from_secs(5 * 60);
@@ -224,8 +233,8 @@ impl Lists {
         for t in tracks {
             self.edits.like(&t.id, like, Some(t.clone()));
         }
-        let Some(c) = self.collection_mut(LIKED_MUSIC) else { return };
         for t in tracks.iter().rev() {
+            let Some(c) = self.collection_mut(liked_list_id(&t.id)) else { continue };
             match (like, c.tracks.iter().position(|x| x.id == t.id)) {
                 (true, None) => {
                     c.tracks.insert(0, t.clone());
@@ -326,7 +335,7 @@ impl RecentEdits {
     /// Whether a song row YouTube Music sent still stands: not taken out of that
     /// playlist, nor unliked when it's Liked Music.
     fn keeps(&self, list: &str, t: &Track, set_id: Option<&str>) -> bool {
-        let unliked = list == LIKED_MUSIC && self.likes.get(&t.id).is_some_and(|(like, _, _)| !*like);
+        let unliked = list == liked_list_id(&t.id) && self.likes.get(&t.id).is_some_and(|(like, _, _)| !*like);
         let taken = set_id.is_some_and(|s| self.removals.get(list).is_some_and(|(r, _)| r.contains(s)));
         !unliked && !taken
     }
@@ -345,9 +354,10 @@ impl RecentEdits {
         let keep: Vec<bool> = c.tracks.iter().enumerate().map(|(i, t)| self.keeps(&c.id, t, c.set_ids.get(i).and_then(Option::as_deref))).collect();
         let dropped: Vec<usize> = keep.iter().enumerate().filter(|(_, k)| !**k).map(|(i, _)| i).collect();
         c.remove_rows(&dropped);
-        if c.id == LIKED_MUSIC {
+        if c.id == LIKED_MUSIC || c.id == crate::spotify::SPOTIFY_LIKED_ID {
             for (id, (like, track, _)) in &self.likes {
-                if let (true, Some(t)) = (*like, track)
+                if liked_list_id(id) == c.id
+                    && let (true, Some(t)) = (*like, track)
                     && !c.tracks.iter().any(|x| &x.id == id)
                 {
                     c.tracks.insert(0, t.clone());

@@ -1208,6 +1208,25 @@ impl App {
         }
     }
 
+    /// Whether the account backing `id` (Spotify or YouTube Music) is signed in.
+    pub(super) fn signed_in_for(&self, id: &str) -> bool {
+        if crate::spotify::is_spotify_id(id) {
+            self.spotify_user.is_some()
+        } else {
+            self.logged_in
+        }
+    }
+
+    pub(super) fn sign_in_prompt_for(&self, id: &str, general_action: &str, item_action: &str) -> String {
+        if crate::spotify::is_spotify_id(id) && self.logged_in {
+            format!("Sign in to Spotify to {item_action}")
+        } else if !crate::spotify::is_spotify_id(id) && self.spotify_user.is_some() {
+            format!("Sign in to YouTube Music to {item_action}")
+        } else {
+            format!("Sign in to {general_action}")
+        }
+    }
+
     pub(super) fn search_req(&self, query: String) -> Req {
         if self.spotify_mode {
             Req::SpotifySearch(query)
