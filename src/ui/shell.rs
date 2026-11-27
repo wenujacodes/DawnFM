@@ -828,7 +828,7 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, _frosted: bool) {
         if theme::light() {
             if enabled { Color32::BLACK } else { Color32::from_black_alpha(115) }
         } else {
-            let c = theme::lerp_color(theme::text_dim(), theme::text(), h);
+            let c = theme::lerp_color(Color32::from_white_alpha(224), Color32::WHITE, h);
             if enabled { c } else { c.gamma_multiply(0.45) }
         }
     };
