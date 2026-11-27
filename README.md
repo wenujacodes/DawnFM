@@ -26,8 +26,8 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.49.43.png" alt="Now Playing with word-synced karaoke lyrics and Kawarp backdrop"></td>
-    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.49.07.png" alt="Album view with Liquid Glass controls and borderless tracklist"></td>
+    <td width="50%"><img src="ss/lyrics.jpg" alt="Now Playing with word-synced karaoke lyrics and Kawarp backdrop"></td>
+    <td width="50%"><img src="ss/album.jpg" alt="Album view with Liquid Glass controls and borderless tracklist"></td>
   </tr>
 </table>
 
@@ -70,12 +70,12 @@ Most desktop music players force a compromise. Official apps feel like slow, clu
 
 <table>
   <tr>
-    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.48.49.png" alt="Home feed with Quick picks and Spotify playlists"><br><sub>Home Feed &amp; Floating Liquid Glass Player</sub></td>
-    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.48.21.png" alt="Search results with Top Results, Artists, and explicit track badges"><br><sub>Search with Top Results &amp; Explicit Track Badges</sub></td>
+    <td width="50%"><img src="ss/home.jpg" alt="Home feed with Quick picks and Spotify playlists"><br><sub>Home Feed &amp; Floating Liquid Glass Player</sub></td>
+    <td width="50%"><img src="ss/search.jpg" alt="Search results with Top Results, Artists, and explicit track badges"><br><sub>Search with Top Results &amp; Explicit Track Badges</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.48.57.png" alt="Spotify Library followed artists view"><br><sub>Spotify Library &amp; Followed Artists</sub></td>
-    <td width="50%"><img src="ss/Screenshot%202026-11-27%20at%2022.49.28.png" alt="Full-bleed Now Playing cover view"><br><sub>Immersive Now Playing View</sub></td>
+    <td width="50%"><img src="ss/library.jpg" alt="Spotify Library followed artists view"><br><sub>Spotify Library &amp; Followed Artists</sub></td>
+    <td width="50%"><img src="ss/now-playing.jpg" alt="Full-bleed Now Playing cover view"><br><sub>Immersive Now Playing View</sub></td>
   </tr>
 </table>
 
