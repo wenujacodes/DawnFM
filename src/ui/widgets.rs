@@ -706,29 +706,80 @@ pub fn paint_cover_fade(ui: &Ui, site: egui::Id, rect: Rect, thumbs: &[Thumb], p
     });
 }
 
-/// One image into `rect`, its right edge fading from `fade_from` of the width to nothing.
-fn fade_mesh(ui: &Ui, url: &str, rect: Rect, uv: Rect, tint: Color32, fade_from: f32) {
-    let Ok(egui::load::TexturePoll::Ready { texture }) = egui::Image::new(url).load_for_size(ui.ctx(), rect.size()) else { return };
+/// Smooth vertical alpha multiplier (`1.0` above `fade_from`, easing to `0.0` at `1.0`)
+/// so banners melt seamlessly into any backdrop underneath without a bottom edge.
+pub fn vfade_alpha(f: f32, fade_from: f32) -> f32 {
+    if f <= fade_from {
+        return 1.0;
+    }
+    let u = ((f - fade_from) / (1.0 - fade_from).max(1e-3)).clamp(0.0, 1.0);
+    let smooth = u * u * (3.0 - 2.0 * u);
+    (1.0 - smooth).powf(1.4)
+}
+
+/// Paint a solid `color` inside `rect`, fading vertically to transparent from `fade_from`.
+pub fn rect_vfade(painter: &egui::Painter, rect: Rect, color: Color32, fade_from: f32) {
+    if rect.width() <= 0.0 || rect.height() <= 0.0 {
+        return;
+    }
+    const SLICES: usize = 32;
+    let mut mesh = egui::Mesh::default();
+    for i in 0..=SLICES {
+        let f = i as f32 / SLICES as f32;
+        let c = color.gamma_multiply(vfade_alpha(f, fade_from));
+        let y = rect.top() + rect.height() * f;
+        mesh.colored_vertex(pos2(rect.left(), y), c);
+        mesh.colored_vertex(pos2(rect.right(), y), c);
+        if i > 0 {
+            let j = (2 * i) as u32;
+            mesh.indices.extend_from_slice(&[j - 2, j - 1, j, j, j - 1, j + 1]);
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+}
+
+/// One texture into `rect`, fading from `fade_from` to transparent either horizontally
+/// (to the right edge) or vertically (to the bottom edge).
+fn tex_fade_mesh(ui: &Ui, texture: &egui::load::SizedTexture, rect: Rect, uv: Rect, tint: Color32, fade_from: f32, vertical: bool) {
     let uv = cover_uv(uv, texture.size, rect.size());
     let fade_from = fade_from.clamp(0.0, 0.999);
-    // Strips along the width, each side's alpha set per vertex: the fade is smooth,
+    // Strips across the fade axis, each vertex alpha set cleanly: the dissolve is smooth,
     // not a handful of steps.
     const SLICES: usize = 64;
     let mut mesh = egui::Mesh::with_texture(texture.id);
     for i in 0..=SLICES {
         let f = i as f32 / SLICES as f32;
-        let a = if f <= fade_from { 1.0 } else { (1.0 - f) / (1.0 - fade_from) };
+        let a = if vertical {
+            vfade_alpha(f, fade_from)
+        } else if f <= fade_from {
+            1.0
+        } else {
+            (1.0 - f) / (1.0 - fade_from)
+        };
         let color = tint.gamma_multiply(a);
-        let x = rect.left() + rect.width() * f;
-        let u = uv.left() + uv.width() * f;
-        mesh.vertices.push(egui::epaint::Vertex { pos: pos2(x, rect.top()), uv: pos2(u, uv.top()), color });
-        mesh.vertices.push(egui::epaint::Vertex { pos: pos2(x, rect.bottom()), uv: pos2(u, uv.bottom()), color });
+        if vertical {
+            let y = rect.top() + rect.height() * f;
+            let v = uv.top() + uv.height() * f;
+            mesh.vertices.push(egui::epaint::Vertex { pos: pos2(rect.left(), y), uv: pos2(uv.left(), v), color });
+            mesh.vertices.push(egui::epaint::Vertex { pos: pos2(rect.right(), y), uv: pos2(uv.right(), v), color });
+        } else {
+            let x = rect.left() + rect.width() * f;
+            let u = uv.left() + uv.width() * f;
+            mesh.vertices.push(egui::epaint::Vertex { pos: pos2(x, rect.top()), uv: pos2(u, uv.top()), color });
+            mesh.vertices.push(egui::epaint::Vertex { pos: pos2(x, rect.bottom()), uv: pos2(u, uv.bottom()), color });
+        }
         if i > 0 {
             let j = (2 * i) as u32;
             mesh.indices.extend_from_slice(&[j - 2, j - 1, j, j, j - 1, j + 1]);
         }
     }
     ui.painter().add(egui::Shape::mesh(mesh));
+}
+
+/// One image into `rect`, its right edge fading from `fade_from` of the width to nothing.
+fn fade_mesh(ui: &Ui, url: &str, rect: Rect, uv: Rect, tint: Color32, fade_from: f32) {
+    let Ok(egui::load::TexturePoll::Ready { texture }) = egui::Image::new(url).load_for_size(ui.ctx(), rect.size()) else { return };
+    tex_fade_mesh(ui, &texture, rect, uv, tint, fade_from, false);
 }
 
 /// Start loading a cover at `px` without drawing it, so it's ready when it appears.
@@ -1680,6 +1731,16 @@ fn cover_uv(uv: Rect, tex_size: Vec2, rect_size: Vec2) -> Rect {
 /// Paint a remote image into `rect`: a pulsing skeleton while it downloads (not
 /// egui's spinner), then a quick fade-in. One already loaded just shows.
 pub fn paint_remote(ui: &Ui, url: &str, rect: Rect, radius: f32, uv: Rect, tint: Color32) {
+    paint_remote_inner(ui, url, rect, radius, uv, tint, None);
+}
+
+/// Like [`paint_remote`], dissolving the bottom edge vertically to transparent from `fade_from`
+/// so hero banners blend into whatever page backdrop sits underneath without a cut line.
+pub fn paint_remote_vfade(ui: &Ui, url: &str, rect: Rect, uv: Rect, tint: Color32, fade_from: f32) {
+    paint_remote_inner(ui, url, rect, 0.0, uv, tint, Some(fade_from));
+}
+
+fn paint_remote_inner(ui: &Ui, url: &str, rect: Rect, radius: f32, uv: Rect, tint: Color32, vfade_from: Option<f32>) {
     const FADE: f64 = 0.14;
     let ctx = ui.ctx();
     let now = ctx.input(|i| i.time);
@@ -1698,12 +1759,21 @@ pub fn paint_remote(ui: &Ui, url: &str, rect: Rect, radius: f32, uv: Rect, tint:
             if a < 1.0 {
                 super::animate(ctx);
             }
-            let uv = cover_uv(uv, texture.size, rect.size());
-            egui::Image::from_texture(texture).uv(uv).corner_radius(CornerRadius::same(radius as u8)).tint(tint.gamma_multiply(theme::ease_out(a))).paint_at(ui, rect);
+            let effective_tint = tint.gamma_multiply(theme::ease_out(a));
+            if let Some(fade_from) = vfade_from {
+                tex_fade_mesh(ui, &texture, rect, uv, effective_tint, fade_from, true);
+            } else {
+                let uv = cover_uv(uv, texture.size, rect.size());
+                egui::Image::from_texture(texture).uv(uv).corner_radius(CornerRadius::same(radius as u8)).tint(effective_tint).paint_at(ui, rect);
+            }
         }
         Ok(egui::load::TexturePoll::Pending { .. }) => {
             ctx.data_mut(|d| d.insert_temp::<Option<f64>>(id, None));
-            skeleton_rect(ui, rect, radius, now);
+            if let Some(fade_from) = vfade_from {
+                rect_vfade(ui.painter(), rect, skeleton_color_at(now, 0.0), fade_from);
+            } else {
+                skeleton_rect(ui, rect, radius, now);
+            }
             super::animate(ctx);
         }
         // A failed image keeps its plain placeholder.
@@ -1896,5 +1966,14 @@ mod shelf_scroll_tests {
         let tall = super::cover_uv(unit, vec2(600.0, 900.0), vec2(120.0, 120.0));
         assert!(((tall.width() * 600.0) - (tall.height() * 900.0)).abs() < 0.5);
         assert!(tall.top() < (1.0 - tall.bottom()));
+    }
+
+    #[test]
+    fn vfade_alpha_dissolves_smoothly_to_zero() {
+        assert_eq!(super::vfade_alpha(0.0, 0.38), 1.0);
+        assert_eq!(super::vfade_alpha(0.38, 0.38), 1.0);
+        let mid = super::vfade_alpha(0.69, 0.38);
+        assert!(mid > 0.25 && mid < 0.5);
+        assert_eq!(super::vfade_alpha(1.0, 0.38), 0.0);
     }
 }

@@ -232,33 +232,13 @@ fn placeholder_artist(app: &mut App, ui: &mut Ui, now: f64) {
     let sk = |ui: &Ui, r: Rect, radius: f32| widgets::skeleton_rect(ui, r, radius, now);
     let sk_at = |ui: &Ui, r: Rect, radius: f32, offset: f64| widgets::skeleton_rect_at(ui, r, radius, now, offset);
     let w = ui.available_width();
-    let page_bg = super::shell::base_color(app);
 
     // ── Hero banner ───────────────────────────────────────────────────────────
-    // Matches the real artist page: (w * 0.48).clamp(340, 560) px tall.
+    // Matches the real artist page: (w * 0.48).clamp(340, 560) px tall, fading its own
+    // alpha to transparent so it dissolves cleanly into the backdrop below.
     let hero_h = (w * 0.48).clamp(340.0, 560.0);
     let (hero, _) = ui.allocate_exact_size(vec2(w, hero_h), Sense::hover());
-    sk(ui, hero, 0.0);
-
-    // Same artist-specific gradient stops as the loaded page (dissolve from 56%).
-    const ARTIST_STOPS: [(f32, u8); 5] = [
-        (0.56,   0),
-        (0.72,  90),
-        (0.86, 185),
-        (0.95, 240),
-        (1.00, 255),
-    ];
-    for sw in ARTIST_STOPS.windows(2) {
-        let (y0, a0) = sw[0];
-        let (y1, a1) = sw[1];
-        let seg = Rect::from_min_max(
-            pos2(hero.left(),  hero.top() + hero.height() * y0),
-            pos2(hero.right(), hero.top() + hero.height() * y1),
-        );
-        let c0 = Color32::from_rgba_unmultiplied(page_bg.r(), page_bg.g(), page_bg.b(), a0);
-        let c1 = Color32::from_rgba_unmultiplied(page_bg.r(), page_bg.g(), page_bg.b(), a1);
-        super::shell::vgradient(ui.painter(), seg, c0, c1);
-    }
+    widgets::rect_vfade(ui.painter(), hero, widgets::skeleton_color(now), 0.38);
 
     // Share circle: top-right corner of the hero, matching the loaded page.
     let share_r = Rect::from_min_size(pos2(hero.right() - 54.0, hero.top() + 18.0), vec2(34.0, 34.0));
@@ -2334,12 +2314,12 @@ pub fn artist(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
         }
     }
     let signature = app.signature_texture(ui.ctx(), &name);
-    let page_bg = super::shell::base_color(app);
     let Some(a) = &app.artist else { return };
     let acts = &mut app.actions;
     let top = &a.top;
 
-    // Full-width cinematic hero banner fading into the page, taller so more of the artist cover is visible.
+    // Full-width cinematic hero banner whose alpha melts smoothly into the live page
+    // backdrop (blurred artwork / ambient halo), avoiding any hard bottom seam.
     let w = ui.available_width();
     let hero_h = (w * 0.48).clamp(340.0, 560.0);
     let (hero, _) = ui.allocate_exact_size(vec2(w, hero_h), Sense::hover());
@@ -2348,28 +2328,9 @@ pub fn artist(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
         let img_ratio = if t.height > 0 { t.width as f32 / t.height as f32 } else { 16.0 / 9.0 };
         let vis_h = (img_ratio / (w / hero_h)).min(1.0);
         let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, vis_h));
-        widgets::paint_remote(ui, &t.url, hero, 0.0, uv, Color32::WHITE);
+        widgets::paint_remote_vfade(ui, &t.url, hero, uv, Color32::WHITE, 0.38);
     } else {
-        ui.painter().rect_filled(hero, 0.0, theme::with_alpha(accent, 0.25));
-    }
-    // Lower downward vertical gradient dissolve so the upper artist cover remains unobstructed.
-    const ARTIST_STOPS: [(f32, u8); 5] = [
-        (0.56, 0),
-        (0.72, 90),
-        (0.86, 185),
-        (0.95, 240),
-        (1.00, 255),
-    ];
-    for sw in ARTIST_STOPS.windows(2) {
-        let (y0_pct, a0) = sw[0];
-        let (y1_pct, a1) = sw[1];
-        let seg = Rect::from_min_max(
-            pos2(hero.left(), hero.top() + hero.height() * y0_pct),
-            pos2(hero.right(), hero.top() + hero.height() * y1_pct),
-        );
-        let c0 = Color32::from_rgba_unmultiplied(page_bg.r(), page_bg.g(), page_bg.b(), a0);
-        let c1 = Color32::from_rgba_unmultiplied(page_bg.r(), page_bg.g(), page_bg.b(), a1);
-        super::shell::vgradient(ui.painter(), seg, c0, c1);
+        widgets::rect_vfade(ui.painter(), hero, theme::with_alpha(accent, 0.25), 0.38);
     }
 
     let artist_target = Target::Artist(id.to_owned());
