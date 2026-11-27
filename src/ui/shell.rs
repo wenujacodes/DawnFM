@@ -1188,12 +1188,12 @@ pub fn player_bar(app: &mut App, ui: &mut Ui, now: f64, _frosted: bool) {
             let lyr_resp = ui.interact(r_lyr, ui.scope_id().with(("bar-r", "lyrics")), Sense::click());
             let lyr_resp = named(lyr_resp, &lyrics_label).on_hover_cursor(egui::CursorIcon::PointingHand);
             let (lyr_h, lyr_s) = widgets::paint_icon_touch(ui, &lyr_resp, r_lyr, light_bar);
-            glyphs::draw(ui, r_lyr.center(), 17.5 * lyr_s, if lyrics_on { glyphs::LYRICS } else { glyphs::LYRICS_OFF }, if lyrics_on { accent } else { r_ink(lyr_h) });
+            glyphs::draw(ui, r_lyr.center(), 17.5 * lyr_s, glyphs::LYRICS_OFF, if lyrics_on { accent } else { r_ink(lyr_h) });
             if lyr_resp.clicked() {
                 app.toggle_lyrics();
             }
         } else {
-            glyphs::draw(ui, r_lyr.center(), 17.5, if lyrics_on { glyphs::LYRICS } else { glyphs::LYRICS_OFF }, if lyrics_on { theme::with_alpha(accent, r_alpha) } else { r_ink(0.0) });
+            glyphs::draw(ui, r_lyr.center(), 17.5, glyphs::LYRICS_OFF, if lyrics_on { theme::with_alpha(accent, r_alpha) } else { r_ink(0.0) });
         }
     }
 
