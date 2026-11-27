@@ -3272,7 +3272,7 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
         divider(ui);
         // The built-in look's colour: its accent, and the tint of every page.
         if app.look().id == crate::preset::DEFAULT_ID {
-            setting_row(ui, "Colour", Some("The accent, and the tint of the pages behind everything."), |ui| {
+            setting_row(ui, "Colour", Some("Follow your system accent colour, or pick one of your own."), |ui| {
                 use crate::preset::COLOURS;
                 const SIDE: f32 = 20.0;
                 const GAP: f32 = 5.0;
@@ -3281,16 +3281,23 @@ fn settings_appearance(app: &mut App, ui: &mut Ui) {
                 for (i, c) in COLOURS.iter().enumerate() {
                     let r = Rect::from_center_size(pos2(row.left() + SIDE / 2.0 + i as f32 * (SIDE + GAP), row.center().y), Vec2::splat(SIDE));
                     let resp = ui.interact(r.expand(GAP / 2.0), ui.scope_id().with(("colour", c.id)), Sense::click());
-                    let resp = widgets::named(resp, c.name).on_hover_text(c.name).on_hover_cursor(egui::CursorIcon::PointingHand);
+                    let tip = if c.id == "system" { "System (automatic)" } else { c.name };
+                    let resp = widgets::named(resp, tip).on_hover_text(tip).on_hover_cursor(egui::CursorIcon::PointingHand);
                     let h = if resp.hovered() { 1.0 } else { 0.0 };
                     let on = theme::anim_bool(ui.ctx(), resp.id.with("on"), c.id == current, 0.15);
-                    let fill = crate::preset::hex(c.accent).unwrap_or(theme::RED);
+                    let fill = crate::preset::colour_fill(c);
                     ui.painter().circle_filled(r.center(), SIDE / 2.0 - 2.0 + h, fill);
+                    if c.id == "system" {
+                        let luma = 0.299 * fill.r() as f32 + 0.587 * fill.g() as f32 + 0.114 * fill.b() as f32;
+                        let mark = if luma > 165.0 { Color32::from_black_alpha(190) } else { Color32::from_white_alpha(220) };
+                        ui.painter().circle_stroke(r.center(), 3.6, egui::Stroke::new(1.5, mark));
+                    }
                     if on > 0.0 {
                         ui.painter().circle_stroke(r.center(), SIDE / 2.0 + 1.5, egui::Stroke::new(1.5, theme::with_alpha(theme::text(), on)));
                     }
                     if resp.clicked() {
                         crate::preset::set_colour(c.id);
+                        app.colour_chosen = true;
                         // egui's own colours (the text selection) follow.
                         theme::apply_chrome(ui.ctx(), app.look());
                     }

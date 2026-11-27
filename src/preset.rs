@@ -401,13 +401,16 @@ impl Preset {
     /// The accent to use given the one sampled from the current cover.
     pub fn accent(&self, from_cover: Color32) -> Color32 {
         // The built-in look's is the listener's pick (Settings › Appearance › Colour).
-        if self.id == DEFAULT_ID {
-            return hex(colour().accent).unwrap_or(from_cover);
+        let spec = if self.id == DEFAULT_ID { colour().accent } else { &self.accent };
+        if spec == "system" {
+            let fallback = if self.id == DEFAULT_ID {
+                hex(DEFAULT_ACCENT).unwrap_or(from_cover)
+            } else {
+                from_cover
+            };
+            return crate::theme::system_accent().unwrap_or(fallback);
         }
-        if self.accent == "system" {
-            return crate::theme::system_accent().unwrap_or(from_cover);
-        }
-        hex(&self.accent).unwrap_or(from_cover)
+        hex(spec).unwrap_or(from_cover)
     }
 
     pub fn solid(&self) -> Color32 {
@@ -428,8 +431,9 @@ pub struct Colour {
     pub solid: &'static str,
 }
 
-/// Built-in colour swatches; Blue is the default (`DEFAULT_COLOUR_IDX`), and any selection is persisted.
+/// Built-in colour swatches; System is the default (`DEFAULT_COLOUR_IDX`), and any selection is persisted.
 pub const COLOURS: &[Colour] = &[
+    Colour { id: "system", name: "System", accent: "system", solid: "#111111" },
     Colour { id: "red", name: "Red", accent: "#f2364d", solid: "#111111" },
     Colour { id: "orange", name: "Orange", accent: "#ff7a2f", solid: "#111111" },
     Colour { id: "amber", name: "Amber", accent: "#f2b33d", solid: "#111111" },
@@ -441,14 +445,26 @@ pub const COLOURS: &[Colour] = &[
     Colour { id: "pink", name: "Pink", accent: "#ff5c9d", solid: "#111111" },
 ];
 
-const DEFAULT_COLOUR_IDX: usize = 5;
+const DEFAULT_COLOUR_IDX: usize = 0;
 
 static COLOUR: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(DEFAULT_COLOUR_IDX);
 
-/// Pick the built-in look's colour by id; one that isn't there uses the default (Blue).
+fn colour_idx(id: &str) -> usize {
+    COLOURS.iter().position(|c| c.id == id).unwrap_or(DEFAULT_COLOUR_IDX)
+}
+
+/// The resolved display colour for a swatch (`"system"` follows the live OS accent, falling back to Blue).
+pub fn colour_fill(c: &Colour) -> Color32 {
+    if c.accent == "system" {
+        crate::theme::system_accent().unwrap_or(crate::theme::BLUE)
+    } else {
+        hex(c.accent).unwrap_or(crate::theme::RED)
+    }
+}
+
+/// Pick the built-in look's colour by id; one that isn't there uses the default (System).
 pub fn set_colour(id: &str) {
-    let i = COLOURS.iter().position(|c| c.id == id).unwrap_or(DEFAULT_COLOUR_IDX);
-    COLOUR.store(i, std::sync::atomic::Ordering::Relaxed);
+    COLOUR.store(colour_idx(id), std::sync::atomic::Ordering::Relaxed);
 }
 
 pub fn colour() -> &'static Colour {
@@ -529,5 +545,14 @@ mod tests {
         }
         assert_eq!(all().len(), list.len() + 1);
         assert_eq!(get("nope").id, DEFAULT_ID);
+    }
+
+    #[test]
+    fn default_colour_is_system_and_allows_explicit_override() {
+        assert_eq!(COLOURS[colour_idx("")].id, "system");
+        assert_eq!(COLOURS[colour_idx("unknown")].id, "system");
+        assert_eq!(COLOURS[colour_idx("system")].id, "system");
+        assert_eq!(COLOURS[colour_idx("blue")].id, "blue");
+        assert_eq!(COLOURS[colour_idx("red")].id, "red");
     }
 }

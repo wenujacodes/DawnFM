@@ -176,24 +176,40 @@ fn system_light() -> Option<bool> {
     }
 }
 
-/// Watches the system's light or dark mode and wakes the UI the moment it changes. An
-/// idle app draws nothing, so without this a switch would show only once something
-/// else (the mouse, a track change) made it repaint. Cheap: a defaults read twice a
-/// second on a background thread, and a repaint only when the mode differs. Safe to
-/// call every frame; it starts once.
+/// Watches the system's light or dark mode and accent colour, waking the UI the moment
+/// either changes. An idle app draws nothing, so without this a switch would show only
+/// once something else (the mouse, a track change) made it repaint. Safe to call every
+/// frame; it starts once.
 pub fn watch_system_appearance(ctx: &egui::Context) {
     use std::sync::atomic::Ordering::Relaxed;
     static STARTED: std::sync::Once = std::sync::Once::new();
-    if STARTED.is_completed() || read_system_light().is_none() {
+    let watches_mode = read_system_light().is_some();
+    let watches_accent = read_system_accent_watch_token().is_some();
+    if STARTED.is_completed() || (!watches_mode && !watches_accent) {
         return;
     }
     STARTED.call_once(|| {
+        let mut prev_accent = read_system_accent_watch_token();
         let ctx = ctx.clone();
         let spawned = std::thread::Builder::new().name("system-appearance".into()).spawn(move || {
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(500));
-                let now = encode_mode(read_system_light());
-                if SYSTEM_MODE.swap(now, Relaxed) != now {
+                let mut changed = false;
+                if watches_mode {
+                    let now = encode_mode(read_system_light());
+                    if SYSTEM_MODE.swap(now, Relaxed) != now {
+                        changed = true;
+                    }
+                }
+                if watches_accent {
+                    let now_accent = read_system_accent_watch_token();
+                    if now_accent != prev_accent {
+                        prev_accent = now_accent;
+                        *SYSTEM_ACCENT.lock_unpoisoned() = None;
+                        changed = true;
+                    }
+                }
+                if changed {
                     ctx.request_repaint();
                 }
             }
@@ -202,6 +218,43 @@ pub fn watch_system_appearance(ctx: &egui::Context) {
             log::warn!("system appearance watcher: {e}");
         }
     });
+}
+
+/// Thread-safe change token for system accent updates on the background watcher thread.
+#[cfg(target_os = "macos")]
+fn read_system_accent_watch_token() -> Option<u32> {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::NSString;
+    // Encode presence + signed integer (`AppleAccentColor` is missing for Multicolor, else -1..=6).
+    let val: Option<Retained<AnyObject>> = unsafe {
+        let defaults: Retained<AnyObject> = msg_send![objc2::class!(NSUserDefaults), standardUserDefaults];
+        msg_send![&*defaults, objectForKey: &*NSString::from_str("AppleAccentColor")]
+    };
+    let n = match val {
+        Some(obj) => {
+            let v: i32 = unsafe { msg_send![&*obj, intValue] };
+            (v + 16).clamp(1, 255) as u32
+        }
+        None => 0,
+    };
+    let style: u32 = match read_system_light() {
+        Some(true) => 1,
+        Some(false) => 2,
+        None => 0,
+    };
+    Some((n << 2) | style)
+}
+
+#[cfg(windows)]
+fn read_system_accent_watch_token() -> Option<u32> {
+    read_system_accent().map(|c| u32::from_le_bytes(c.to_array()))
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn read_system_accent_watch_token() -> Option<u32> {
+    None
 }
 
 /// macOS: the system's appearance, from the user defaults ("Dark" while it's dark, with
@@ -468,14 +521,15 @@ pub fn show_share_sheet(_url: &str, _anchor: egui::Rect) -> bool {
     false
 }
 
-/// The Windows accent colour, in the lighter shade Windows itself uses on dark
-/// surfaces (`AccentPalette`'s second entry), or the base accent if there's no palette.
-/// Read again every couple of seconds, so a new colour picked in Windows' settings
-/// shows without a restart. `None` off Windows or when the setting can't be read.
+static SYSTEM_ACCENT: std::sync::Mutex<Option<(std::time::Instant, Option<Color32>)>> = std::sync::Mutex::new(None);
+
+/// The system's accent colour (macOS `NSColor.controlAccentColor`, or Windows'
+/// `AccentPalette` light-2 / `DWM AccentColor`). Read again every couple of seconds (and
+/// invalidated immediately when system appearance/accent changes) so a new OS colour shows
+/// without a restart. `None` when unsupported or unavailable.
 pub fn system_accent() -> Option<Color32> {
     use std::time::{Duration, Instant};
-    static ACCENT: std::sync::Mutex<Option<(Instant, Option<Color32>)>> = std::sync::Mutex::new(None);
-    let mut cached = ACCENT.lock_unpoisoned();
+    let mut cached = SYSTEM_ACCENT.lock_unpoisoned();
     match *cached {
         Some((at, c)) if at.elapsed() < Duration::from_secs(2) => c,
         _ => {
@@ -486,6 +540,53 @@ pub fn system_accent() -> Option<Color32> {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn read_system_accent() -> Option<Color32> {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    // SAFETY: AppKit `NSColor` / `NSColorSpace` queries return retained/autoreleased
+    // catalog objects; convert to sRGB before reading RGB channels.
+    unsafe {
+        let ns_color: Option<Retained<AnyObject>> = msg_send![objc2::class!(NSColor), controlAccentColor];
+        let ns_color = ns_color?;
+        let srgb: Option<Retained<AnyObject>> = msg_send![objc2::class!(NSColorSpace), sRGBColorSpace];
+        let conv: Option<Retained<AnyObject>> = match srgb.as_deref() {
+            Some(cs) => msg_send![&*ns_color, colorUsingColorSpace: cs],
+            None => None,
+        };
+        let c = conv?;
+        let r: f64 = msg_send![&*c, redComponent];
+        let g: f64 = msg_send![&*c, greenComponent];
+        let b: f64 = msg_send![&*c, blueComponent];
+        let to_u8 = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        Some(Color32::from_rgb(to_u8(r), to_u8(g), to_u8(b)))
+    }
+}
+
+#[cfg(windows)]
+fn read_system_accent() -> Option<Color32> {
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD, RegGetValueW};
+    use windows::core::w;
+    // SAFETY: out-buffers sized to what we pass; the strings are static.
+    unsafe {
+        // Eight RGBA swatches, lightest first; the second is "light 2".
+        let mut palette = [0u8; 32];
+        let mut size = palette.len() as u32;
+        let key = w!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent");
+        if RegGetValueW(HKEY_CURRENT_USER, key, w!("AccentPalette"), RRF_RT_REG_BINARY, None, Some(palette.as_mut_ptr() as *mut _), Some(&mut size)).is_ok() && size >= 8 {
+            return Some(Color32::from_rgb(palette[4], palette[5], palette[6]));
+        }
+        // 0xAABBGGRR.
+        let mut abgr = 0u32;
+        let mut size = 4u32;
+        RegGetValueW(HKEY_CURRENT_USER, w!(r"Software\Microsoft\Windows\DWM"), w!("AccentColor"), RRF_RT_REG_DWORD, None, Some(&mut abgr as *mut u32 as *mut _), Some(&mut size))
+            .is_ok()
+            .then(|| Color32::from_rgb(abgr as u8, (abgr >> 8) as u8, (abgr >> 16) as u8))
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn read_system_accent() -> Option<Color32> {
     None
 }
@@ -1299,6 +1400,15 @@ mod tests {
         assert!(font.charmap().map('\u{0D85}').is_some(), "missing Sinhala letter අ");
         assert!(font.charmap().map('\u{0DC3}').is_some(), "missing Sinhala letter ස");
         assert!(em_metrics(NOTO_SINHALA, 0).is_some());
+    }
+
+    #[test]
+    fn system_accent_reads_without_panicking() {
+        let accent = system_accent();
+        #[cfg(target_os = "macos")]
+        assert!(accent.is_some(), "macOS NSColor.controlAccentColor should resolve");
+        #[cfg(not(target_os = "macos"))]
+        let _ = accent;
     }
 }
 

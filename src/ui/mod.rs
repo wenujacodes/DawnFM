@@ -461,6 +461,8 @@ pub struct App {
     pub dominant: Color32,
     /// Selected theme preset (see `preset.rs`).
     theme_id: String,
+    /// Whether the listener explicitly chose a swatch in Settings (vs migrating old default "blue").
+    colour_chosen: bool,
     /// Preset whose chrome (glass, corner radius) is installed in the egui style.
     chrome_applied: Option<String>,
     /// Light or dark pages (the ytm-rs theme's; see `light_pages`).
@@ -692,7 +694,11 @@ impl App {
             crate::transfer::Transfer::new(backend.data_dir(), Arc::new(move || b.wake()))
         };
         // Not a field: the built-in look reads its colour from the presets.
-        crate::preset::set_colour(get("colour").as_deref().unwrap_or_default());
+        let saved_colour = get("colour").unwrap_or_default();
+        let colour_chosen = get("colour_chosen").is_some_and(|v| v == "1")
+            || (!saved_colour.is_empty() && saved_colour != "blue" && saved_colour != "system");
+        let initial_colour = if !colour_chosen && saved_colour == "blue" { "" } else { &saved_colour };
+        crate::preset::set_colour(initial_colour);
         let mut app = Self {
             backend,
             audio,
@@ -847,6 +853,7 @@ impl App {
             accent: theme::BLUE,
             dominant: Color32::from_rgb(0x18, 0x14, 0x1c),
             theme_id: crate::preset::DEFAULT_ID.to_owned(),
+            colour_chosen,
             chrome_applied: None,
             // Dev hook: YTM_APPEARANCE=light|dark|system tries a mode without saving it.
             appearance: theme::Appearance::from_key(&dev_var("YTM_APPEARANCE").map(str::to_owned).or_else(|| get("appearance")).unwrap_or_default()),
@@ -2011,6 +2018,11 @@ impl eframe::App for App {
         }
         let accent = self.accent_color();
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("accent"), accent));
+        ctx.global_style_mut(|s| {
+            if s.visuals.selection.bg_fill != accent {
+                s.visuals.selection.bg_fill = accent;
+            }
+        });
         let app_style = &look.app;
         // Once now playing has slid all the way up it hides everything but the player
         // bar, so the pages and the full-screen background under it aren't drawn.
@@ -2343,6 +2355,7 @@ impl eframe::App for App {
         if std::env::var_os("YTM_THEME").is_none() {
             storage.set_string("theme", self.theme_id.clone());
             storage.set_string("colour", crate::preset::colour().id.to_owned());
+            storage.set_string("colour_chosen", b(self.colour_chosen));
         }
         if dev_var("YTM_FONT").is_none() {
             storage.set_string("font", theme::font_choice());
