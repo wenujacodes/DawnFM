@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail};
-use futures_util::future::join_all;
+use futures_util::{StreamExt, future::join_all, stream};
 use reqwest::Method;
 use serde_json::Value;
 use tokio::sync::RwLock;
@@ -45,6 +45,7 @@ pub struct SpotifyClient {
     followed_artists: RwLock<HashSet<String>>,
     playlist_cover_cache: RwLock<HashMap<String, Vec<Thumb>>>,
     editorial_cache: RwLock<Option<Vec<Card>>>,
+    user_names: RwLock<HashMap<String, String>>,
     collection_loaded: RwLock<bool>,
 }
 
@@ -58,16 +59,20 @@ impl SpotifyClient {
             followed_artists: RwLock::new(HashSet::new()),
             playlist_cover_cache: RwLock::new(HashMap::new()),
             editorial_cache: RwLock::new(None),
+            user_names: RwLock::new(HashMap::new()),
             collection_loaded: RwLock::new(false),
         }
     }
 
-    pub fn saved_username(&self) -> Option<String> {
-        self.auth.saved_username()
+    pub fn saved_display_name(&self) -> Option<String> {
+        self.auth.saved_display_name()
     }
 
     pub async fn restore_if_needed(&self) -> Result<Option<String>> {
-        self.auth.restore_if_needed(&proxy::http()).await
+        let Some(username) = self.auth.restore_if_needed(&proxy::http()).await? else {
+            return Ok(None);
+        };
+        Ok(Some(self.resolve_signed_in_display_name(&username).await))
     }
 
     pub async fn signed_in_username(&self) -> Option<String> {
@@ -79,7 +84,13 @@ impl SpotifyClient {
     }
 
     pub async fn start_email_login(&self, email: &str) -> Result<EmailLoginStep> {
-        self.auth.start_email_login(&proxy::http(), email).await
+        match self.auth.start_email_login(&proxy::http(), email).await? {
+            EmailLoginStep::SignedIn(u) => {
+                let _ = self.refresh_liked_tracks().await;
+                Ok(EmailLoginStep::SignedIn(self.resolve_signed_in_display_name(&u).await))
+            }
+            EmailLoginStep::NeedsCode(ch) => Ok(EmailLoginStep::NeedsCode(ch)),
+        }
     }
 
     pub async fn finish_email_login(
@@ -92,7 +103,7 @@ impl SpotifyClient {
             .finish_email_login(&proxy::http(), challenge, code)
             .await?;
         let _ = self.refresh_liked_tracks().await;
-        Ok(user)
+        Ok(self.resolve_signed_in_display_name(&user).await)
     }
 
     pub async fn login_password(&self, username: &str, password: &str) -> Result<String> {
@@ -101,13 +112,13 @@ impl SpotifyClient {
             .login_password(&proxy::http(), username, password)
             .await?;
         let _ = self.refresh_liked_tracks().await;
-        Ok(user)
+        Ok(self.resolve_signed_in_display_name(&user).await)
     }
 
     pub async fn login_sp_dc(&self, sp_dc: &str) -> Result<String> {
         let user = self.auth.login_sp_dc(&proxy::http(), sp_dc).await?;
         let _ = self.refresh_liked_tracks().await;
-        Ok(user)
+        Ok(self.resolve_signed_in_display_name(&user).await)
     }
 
     pub async fn logout(&self) {
@@ -118,6 +129,7 @@ impl SpotifyClient {
         self.followed_artists.write().await.clear();
         self.playlist_cover_cache.write().await.clear();
         *self.editorial_cache.write().await = None;
+        self.user_names.write().await.clear();
         *self.collection_loaded.write().await = false;
     }
 
@@ -402,7 +414,9 @@ impl SpotifyClient {
         let attrs = slc.message(3)?;
         let title = attrs.text(1).filter(|s| !s.is_empty())?;
         let thumbs = playlist_thumbs(&attrs);
-        let owner = slc.text(16).or_else(|| slc.text(11)).unwrap_or_default();
+        let owner = self
+            .resolve_owner_label(slc.text(11).as_deref(), slc.text(16).as_deref())
+            .await;
         if !thumbs.is_empty() {
             self.playlist_cover_cache
                 .write()
@@ -596,11 +610,29 @@ impl SpotifyClient {
             }
         }
 
-        let (tracks_res, albums_res, artists_res) = tokio::join!(
+        let owner_ids: Vec<String> = raw_playlists
+            .iter()
+            .filter_map(|c| {
+                let raw = c.subtitle.trim();
+                (looks_like_spotify_user_id(raw) || raw.eq_ignore_ascii_case("spotify"))
+                    .then(|| raw.to_owned())
+            })
+            .collect();
+
+        let (tracks_res, albums_res, artists_res, ()) = tokio::join!(
             self.hydrate_tracks(&track_uris),
             self.hydrate_albums(&album_uris),
             self.hydrate_artists(&artist_uris),
+            self.resolve_user_names(&owner_ids),
         );
+        for card in &mut raw_playlists {
+            if looks_like_spotify_user_id(&card.subtitle) || card.subtitle.eq_ignore_ascii_case("spotify") {
+                let resolved = self.cached_owner_name(&card.subtitle).await;
+                if !resolved.is_empty() {
+                    card.subtitle = resolved;
+                }
+            }
+        }
 
         let hydrated_tracks: HashMap<String, Track> = tracks_res
             .unwrap_or_default()
@@ -974,7 +1006,8 @@ impl SpotifyClient {
             .map(|s| strip_html(&s))
             .filter(|s| !s.is_empty());
         let mut thumbs = attrs.as_ref().map(playlist_thumbs).unwrap_or_default();
-        let owner = slc.text(16).or_else(|| slc.text(11)).unwrap_or_default();
+        let owner_id = slc.text(11).unwrap_or_default();
+        let owner_text = slc.text(16).unwrap_or_default();
 
         let mut item_uris = Vec::new();
         let mut raw_count = 0usize;
@@ -992,7 +1025,14 @@ impl SpotifyClient {
                 }
             }
         }
-        let tracks = self.hydrate_tracks(&item_uris).await?;
+        let (tracks_res, owner) = tokio::join!(
+            self.hydrate_tracks(&item_uris),
+            self.resolve_owner_label(
+                (!owner_id.is_empty()).then_some(owner_id.as_str()),
+                (!owner_text.is_empty()).then_some(owner_text.as_str()),
+            ),
+        );
+        let tracks = tracks_res?;
         if thumbs.is_empty() {
             thumbs = mosaic_from_tracks(&tracks);
         }
@@ -1004,7 +1044,9 @@ impl SpotifyClient {
         }
         let set_ids = vec![None; tracks.len()];
         let me = self.signed_in_username().await.unwrap_or_default();
-        let owned = !me.is_empty() && !owner.is_empty() && me.eq_ignore_ascii_case(&owner);
+        let owned = !me.is_empty()
+            && ((!owner_id.is_empty() && me.eq_ignore_ascii_case(&owner_id))
+                || (!owner_text.is_empty() && me.eq_ignore_ascii_case(&owner_text)));
         let more = raw_count > 0 && (truncated || pos + raw_count < total_length);
 
         Ok((
@@ -1177,7 +1219,7 @@ impl SpotifyClient {
     }
 
     async fn rootlist(&self, username: &str) -> Result<Vec<Card>> {
-        let mut cards = Vec::new();
+        let mut raw_cards: Vec<(String, String, i32, String, Vec<Thumb>)> = Vec::new();
         let mut seen = HashSet::new();
         let mut from = 0usize;
         let enc_user: String = url::form_urlencoded::byte_serialize(username.as_bytes()).collect();
@@ -1233,24 +1275,31 @@ impl SpotifyClient {
                 let count = info.and_then(|m| m.number(3)).unwrap_or(0).max(0);
                 let owner = info.and_then(|m| m.text(5)).unwrap_or_default();
                 let thumbs = attrs.as_ref().map(playlist_thumbs).unwrap_or_default();
-                let subtitle = if owner.is_empty() {
-                    format!("{count} songs")
-                } else {
-                    format!("{owner} • {count} songs")
-                };
-                cards.push(Card {
-                    title,
-                    subtitle,
-                    thumbs,
-                    target: Target::Playlist(u),
-                    round: false,
-                    links: Vec::new(),
-                });
+                raw_cards.push((u, title, count, owner, thumbs));
             }
             from += raw_count;
             if raw_count == 0 || (!truncated && pos + raw_count >= total_length) {
                 break;
             }
+        }
+        let owner_ids: Vec<String> = raw_cards.iter().map(|(_, _, _, o, _)| o.clone()).collect();
+        self.resolve_user_names(&owner_ids).await;
+        let mut cards = Vec::with_capacity(raw_cards.len());
+        for (u, title, count, raw_owner, thumbs) in raw_cards {
+            let owner = self.cached_owner_name(&raw_owner).await;
+            let subtitle = if owner.is_empty() {
+                format!("{count} songs")
+            } else {
+                format!("{owner} • {count} songs")
+            };
+            cards.push(Card {
+                title,
+                subtitle,
+                thumbs,
+                target: Target::Playlist(u),
+                round: false,
+                links: Vec::new(),
+            });
         }
         Ok(cards)
     }
@@ -1660,7 +1709,7 @@ impl SpotifyClient {
     }
 
     async fn web_playlists(&self) -> Result<Vec<Card>> {
-        let mut cards = Vec::new();
+        let mut raw_cards: Vec<(String, String, String, String, u64, Vec<Thumb>)> = Vec::new();
         let mut url = Some("https://api.spotify.com/v1/me/playlists?limit=50".to_string());
         for _ in 0..10 {
             let Some(u) = url.take() else { break };
@@ -1669,7 +1718,8 @@ impl SpotifyClient {
                 let (Some(id), Some(title)) = (p["id"].as_str(), p["name"].as_str()) else {
                     continue;
                 };
-                let owner = p["owner"]["display_name"].as_str().unwrap_or_default();
+                let display = p["owner"]["display_name"].as_str().unwrap_or_default().trim().to_string();
+                let owner_id = p["owner"]["id"].as_str().unwrap_or_default().trim().to_string();
                 let count = p["tracks"]["total"].as_u64().or(p["items"]["total"].as_u64()).unwrap_or(0);
                 let thumbs = p["images"]
                     .as_array()
@@ -1677,21 +1727,42 @@ impl SpotifyClient {
                     .and_then(|img| img["url"].as_str())
                     .map(thumbs_from_url)
                     .unwrap_or_default();
-                let subtitle = if owner.is_empty() {
-                    format!("{count} songs")
-                } else {
-                    format!("{owner} • {count} songs")
-                };
-                cards.push(Card {
-                    title: title.to_string(),
-                    subtitle,
-                    thumbs,
-                    target: Target::Playlist(format!("spotify:playlist:{id}")),
-                    round: false,
-                    links: Vec::new(),
-                });
+                raw_cards.push((id.to_string(), title.to_string(), display, owner_id, count, thumbs));
             }
             url = page["next"].as_str().map(str::to_owned);
+        }
+        let need_resolve: Vec<String> = raw_cards
+            .iter()
+            .filter_map(|(_, _, display, owner_id, _, _)| {
+                let needs = display.is_empty() || looks_like_spotify_user_id(display);
+                needs.then(|| {
+                    if !owner_id.is_empty() { owner_id.clone() } else { display.clone() }
+                })
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+        self.resolve_user_names(&need_resolve).await;
+        let mut cards = Vec::with_capacity(raw_cards.len());
+        for (id, title, display, owner_id, count, thumbs) in raw_cards {
+            let owner = if !display.is_empty() && !looks_like_spotify_user_id(&display) {
+                display
+            } else {
+                let lookup = if !owner_id.is_empty() { owner_id } else { display };
+                self.cached_owner_name(&lookup).await
+            };
+            let subtitle = if owner.is_empty() {
+                format!("{count} songs")
+            } else {
+                format!("{owner} • {count} songs")
+            };
+            cards.push(Card {
+                title,
+                subtitle,
+                thumbs,
+                target: Target::Playlist(format!("spotify:playlist:{id}")),
+                round: false,
+                links: Vec::new(),
+            });
         }
         Ok(cards)
     }
@@ -1794,6 +1865,154 @@ impl SpotifyClient {
         }
         bail!("Spotify authentication retry exhausted")
     }
+
+    async fn fetch_user_display_name(&self, username: &str, is_self: bool) -> Option<String> {
+        let clean = normalize_owner_id(username);
+        if clean.is_empty() {
+            return None;
+        }
+        if clean.eq_ignore_ascii_case("spotify") {
+            return Some("Spotify".to_string());
+        }
+        let enc: String = url::form_urlencoded::byte_serialize(clean.as_bytes()).collect();
+        let sp_url = format!("{SPCLIENT_BASE}user-profile-view/v3/profile/{enc}?market=from_token");
+        if let Ok(bytes) = self.sp_request(Method::GET, &sp_url, None, "application/json", None).await
+            && let Ok(val) = serde_json::from_slice::<Value>(&bytes)
+            && let Some(name) = parse_profile_display_name(&val)
+        {
+            return Some(name);
+        }
+        let web_url = if is_self {
+            "https://api.spotify.com/v1/me".to_string()
+        } else {
+            format!("https://api.spotify.com/v1/users/{enc}")
+        };
+        if let Ok(val) = self.web_get_json(&web_url).await {
+            return parse_profile_display_name(&val);
+        }
+        None
+    }
+
+    async fn resolve_user_names(&self, usernames: &[String]) {
+        let mut to_fetch = Vec::new();
+        let mut seen = HashSet::new();
+        let mut seeds = Vec::new();
+        {
+            let cache = self.user_names.read().await;
+            for raw in usernames {
+                let id = normalize_owner_id(raw);
+                if id.is_empty() || !seen.insert(id.to_owned()) || cache.contains_key(id) {
+                    continue;
+                }
+                if id.eq_ignore_ascii_case("spotify") {
+                    seeds.push((id.to_owned(), "Spotify".to_owned()));
+                } else {
+                    to_fetch.push(id.to_owned());
+                }
+            }
+        }
+        if !seeds.is_empty() {
+            let mut cache = self.user_names.write().await;
+            for (k, v) in seeds {
+                cache.insert(k, v);
+            }
+        }
+        if to_fetch.is_empty() {
+            return;
+        }
+        let me = self.signed_in_username().await.unwrap_or_default();
+        let me_clean = normalize_owner_id(&me).to_owned();
+        let resolved: Vec<(String, String)> = stream::iter(to_fetch)
+            .map(|id| {
+                let is_self = !me_clean.is_empty() && id.eq_ignore_ascii_case(&me_clean);
+                async move {
+                    let name = self
+                        .fetch_user_display_name(&id, is_self)
+                        .await
+                        .unwrap_or_else(|| id.clone());
+                    (id, name)
+                }
+            })
+            .buffer_unordered(8)
+            .collect()
+            .await;
+        let mut cache = self.user_names.write().await;
+        for (id, name) in resolved {
+            cache.insert(id, name);
+        }
+    }
+
+    async fn cached_owner_name(&self, raw: &str) -> String {
+        let id = normalize_owner_id(raw);
+        if id.is_empty() {
+            return String::new();
+        }
+        self.user_names
+            .read()
+            .await
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| id.to_owned())
+    }
+
+    async fn resolve_owner_label(&self, owner_id: Option<&str>, text_owner: Option<&str>) -> String {
+        let id_clean = owner_id.map(normalize_owner_id).filter(|s| !s.is_empty());
+        let text_clean = text_owner.map(str::trim).filter(|s| !s.is_empty());
+        if let Some(txt) = text_clean {
+            let same_as_id = id_clean.is_some_and(|id| txt.eq_ignore_ascii_case(id));
+            if !same_as_id && !looks_like_spotify_user_id(txt) && !txt.eq_ignore_ascii_case("spotify") {
+                return txt.to_owned();
+            }
+        }
+        let Some(lookup) = id_clean.or_else(|| text_clean.map(normalize_owner_id)) else {
+            return String::new();
+        };
+        let owned = [lookup.to_owned()];
+        self.resolve_user_names(&owned).await;
+        self.cached_owner_name(lookup).await
+    }
+
+    pub async fn resolve_signed_in_display_name(&self, username: &str) -> String {
+        if let Some(stored) = self.auth.stored_display_name().await {
+            self.user_names
+                .write()
+                .await
+                .insert(normalize_owner_id(username).to_owned(), stored.clone());
+            return stored;
+        }
+        if let Some(name) = self.fetch_user_display_name(username, true).await {
+            self.auth.update_display_name(&name).await;
+            self.user_names
+                .write()
+                .await
+                .insert(normalize_owner_id(username).to_owned(), name.clone());
+            return name;
+        }
+        username.to_owned()
+    }
+}
+
+fn normalize_owner_id(raw: &str) -> &str {
+    let trimmed = raw.trim();
+    trimmed.strip_prefix("spotify:user:").unwrap_or(trimmed).trim()
+}
+
+fn parse_profile_display_name(val: &Value) -> Option<String> {
+    val["name"]
+        .as_str()
+        .or_else(|| val["display_name"].as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
+fn looks_like_spotify_user_id(raw: &str) -> bool {
+    let clean = normalize_owner_id(raw);
+    if clean.len() < 5 || !clean.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return false;
+    }
+    clean.bytes().all(|b| b.is_ascii_digit())
+        || (clean.len() >= 20 && clean.bytes().any(|b| b.is_ascii_digit()))
 }
 
 fn parse_track(uri: &str, raw: &[u8]) -> Result<Track> {
@@ -2105,4 +2324,31 @@ fn format_count(n: u64) -> String {
         out.push(ch);
     }
     out.chars().rev().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_profile_display_names_from_spclient_and_web_api() {
+        let sp = serde_json::json!({ "name": "Wenuja", "username": "31abc123" });
+        assert_eq!(parse_profile_display_name(&sp).as_deref(), Some("Wenuja"));
+
+        let web = serde_json::json!({ "id": "31abc123", "display_name": "Lofi Community" });
+        assert_eq!(parse_profile_display_name(&web).as_deref(), Some("Lofi Community"));
+
+        let empty = serde_json::json!({ "name": "   " });
+        assert_eq!(parse_profile_display_name(&empty), None);
+    }
+
+    #[test]
+    fn recognizes_numeric_and_generated_spotify_user_ids() {
+        assert_eq!(normalize_owner_id("spotify:user:31xyz123"), "31xyz123");
+        assert!(looks_like_spotify_user_id("1214567890"));
+        assert!(looks_like_spotify_user_id("31abcdefghijklmnopqrstuvwxyz"));
+        assert!(looks_like_spotify_user_id("spotify:user:3123456789abcdefghij"));
+        assert!(!looks_like_spotify_user_id("Lofi Girl"));
+        assert!(!looks_like_spotify_user_id("Spotify"));
+    }
 }

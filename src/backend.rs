@@ -1006,7 +1006,7 @@ impl Backend {
                             Ok(u) => u,
                             Err(e) => {
                                 log::warn!("spotify restore failed at launch (keeping saved session): {e:#}");
-                                self.spotify.saved_username()
+                                self.spotify.saved_display_name()
                             }
                         }
                     };
@@ -2024,7 +2024,7 @@ impl Backend {
     }
 
     pub fn saved_spotify_user(&self) -> Option<String> {
-        self.spotify.saved_username()
+        self.spotify.saved_display_name()
     }
 }
 

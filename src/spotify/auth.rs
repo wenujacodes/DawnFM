@@ -34,6 +34,8 @@ static COUNTER: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct StoredSession {
     username: String,
+    #[serde(default)]
+    display_name: Option<String>,
     device_id: String,
     #[serde(default)]
     stored_cred: Vec<u8>,
@@ -93,6 +95,7 @@ pub struct SpotifyAuth {
     access_token: RwLock<Option<CachedAccessToken>>,
     stored: RwLock<Option<StoredSession>>,
     saved_user: std::sync::RwLock<Option<String>>,
+    saved_display: std::sync::RwLock<Option<String>>,
     refresh_lock: Mutex<()>,
 }
 
@@ -100,6 +103,10 @@ impl SpotifyAuth {
     pub fn new(data_dir: PathBuf) -> Self {
         let loaded = load_stored(&data_dir);
         let saved_user = loaded.as_ref().map(|s| s.username.clone());
+        let saved_display = loaded
+            .as_ref()
+            .and_then(|s| s.display_name.clone())
+            .filter(|s| !s.is_empty());
         let device_id = loaded
             .as_ref()
             .map(|s| s.device_id.clone())
@@ -112,6 +119,7 @@ impl SpotifyAuth {
             access_token: RwLock::new(None),
             stored: RwLock::new(loaded),
             saved_user: std::sync::RwLock::new(saved_user),
+            saved_display: std::sync::RwLock::new(saved_display),
             refresh_lock: Mutex::new(()),
         }
     }
@@ -122,9 +130,49 @@ impl SpotifyAuth {
         self.saved_user.read_unpoisoned().clone()
     }
 
-    fn set_saved_username(&self, name: Option<String>) {
+    /// Cached human display name if known, falling back to the raw username.
+    pub fn saved_display_name(&self) -> Option<String> {
         use crate::sync::RwLockExt;
-        *self.saved_user.write_unpoisoned() = name;
+        self.saved_display
+            .read_unpoisoned()
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or_else(|| self.saved_username())
+    }
+
+    fn set_saved_user(&self, username: Option<String>, display_name: Option<String>) {
+        use crate::sync::RwLockExt;
+        *self.saved_user.write_unpoisoned() = username;
+        *self.saved_display.write_unpoisoned() = display_name.filter(|s| !s.is_empty());
+    }
+
+    pub async fn stored_display_name(&self) -> Option<String> {
+        self.stored
+            .read()
+            .await
+            .as_ref()
+            .and_then(|s| s.display_name.clone())
+            .filter(|s| !s.is_empty())
+    }
+
+    pub async fn update_display_name(&self, name: &str) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        {
+            use crate::sync::RwLockExt;
+            *self.saved_display.write_unpoisoned() = Some(name.to_owned());
+        }
+        let mut stored = self.stored.write().await;
+        if let Some(s) = stored.as_mut() {
+            if s.display_name.as_deref() != Some(name) {
+                s.display_name = Some(name.to_owned());
+                if let Ok(bytes) = serde_json::to_vec(s) {
+                    let _ = vault::set(VAULT_KEY, &self.data_dir, &bytes);
+                }
+            }
+        }
     }
 
     pub async fn signed_in_username(&self) -> Option<String> {
@@ -155,7 +203,7 @@ impl SpotifyAuth {
         *self.client_token.write().await = None;
         *self.access_token.write().await = None;
         *self.stored.write().await = None;
-        self.set_saved_username(None);
+        self.set_saved_user(None, None);
         let _ = vault::delete(VAULT_KEY, &self.data_dir);
     }
 
@@ -225,7 +273,9 @@ impl SpotifyAuth {
             let wt = crate::transfer::spotify::web_tokens_from_cookie(http, sp_dc).await?;
             let ct_val = wt.client_token.clone();
             let dev_val = wt.device_id.clone();
-            let access = self.save_web_tokens(saved.username.clone(), sp_dc, wt).await;
+            let access = self
+                .save_web_tokens(saved.username.clone(), saved.display_name.clone(), sp_dc, wt)
+                .await;
             return Ok(SpotifyTokens {
                 username: access.username,
                 access_token: access.token,
@@ -312,7 +362,12 @@ impl SpotifyAuth {
             .filter(|s| !s.is_empty())
             .ok_or_else(|| anyhow!("Spotify returned no username for signed-in session"))?
             .to_owned();
-        let access = self.save_web_tokens(username, sp_dc, wt).await;
+        let display_name = me["display_name"]
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned);
+        let access = self.save_web_tokens(username, display_name, sp_dc, wt).await;
         Ok(access.username)
     }
 
@@ -420,6 +475,7 @@ impl SpotifyAuth {
     async fn save_web_tokens(
         &self,
         username: String,
+        display_name: Option<String>,
         sp_dc: &str,
         wt: crate::transfer::spotify::WebTokens,
     ) -> CachedAccessToken {
@@ -440,6 +496,7 @@ impl SpotifyAuth {
         *self.access_token.write().await = Some(cached.clone());
         let saved = StoredSession {
             username,
+            display_name: display_name.clone(),
             device_id: wt.device_id,
             stored_cred: Vec::new(),
             sp_dc: Some(sp_dc.to_owned()),
@@ -447,7 +504,7 @@ impl SpotifyAuth {
         if let Ok(bytes) = serde_json::to_vec(&saved) {
             let _ = vault::set(VAULT_KEY, &self.data_dir, &bytes);
         }
-        self.set_saved_username(Some(saved.username.clone()));
+        self.set_saved_user(Some(saved.username.clone()), display_name);
         *self.stored.write().await = Some(saved);
         cached
     }
@@ -468,6 +525,7 @@ impl SpotifyAuth {
         if !ok.stored_cred.is_empty() {
             let saved = StoredSession {
                 username: ok.username,
+                display_name: None,
                 device_id: device_id.to_string(),
                 stored_cred: ok.stored_cred,
                 sp_dc: None,
@@ -475,10 +533,7 @@ impl SpotifyAuth {
             if let Ok(bytes) = serde_json::to_vec(&saved) {
                 let _ = vault::set(VAULT_KEY, &self.data_dir, &bytes);
             }
-            {
-                use crate::sync::RwLockExt;
-                *self.saved_user.write_unpoisoned() = Some(saved.username.clone());
-            }
+            self.set_saved_user(Some(saved.username.clone()), None);
             *self.stored.write().await = Some(saved);
         }
         cached
