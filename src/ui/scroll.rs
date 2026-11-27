@@ -40,6 +40,11 @@ impl Gesture {
     /// pending should stop.
     pub fn route(&mut self, events: &mut Vec<egui::Event>, time: f64, panes: &[egui::Rect]) -> bool {
         let pane_at = |p: Option<egui::Pos2>| p.and_then(|p| panes.iter().position(|r| r.contains(p)));
+        // If a drawer closed since the last scroll event, don't keep locking to it.
+        if self.pane.is_some_and(|i| i >= panes.len()) {
+            self.last = None;
+            self.pane = None;
+        }
         events.retain_mut(|e| match e {
             egui::Event::PointerMoved(p) => {
                 self.pointer = Some(*p);
@@ -47,6 +52,13 @@ impl Gesture {
             }
             egui::Event::PointerGone => {
                 self.pointer = None;
+                true
+            }
+            egui::Event::PointerButton { pos, pressed: true, .. } => {
+                self.pointer = Some(*pos);
+                if pane_at(self.pointer) != self.pane {
+                    self.last = None;
+                }
                 true
             }
             // Ctrl/Cmd + wheel zooms; it's no scroll.
@@ -60,10 +72,10 @@ impl Gesture {
                     self.axis = None;
                     self.travel = egui::Vec2::ZERO;
                 }
-                self.last = Some(time);
                 if pane_at(self.pointer) != self.pane {
                     return false;
                 }
+                self.last = Some(time);
                 let axis = match self.axis {
                     Some(a) => a,
                     None => {
@@ -148,5 +160,49 @@ mod tests {
         let mut later = vec![notch()];
         g.route(&mut later, 0.6, &sidebar());
         assert_eq!(deltas(&later).len(), 1);
+    }
+
+    #[test]
+    fn repeated_scrolls_after_leaving_drawer_do_not_starve_main_page() {
+        let mut g = Gesture::default();
+        let panes = vec![
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 800.0)),
+            egui::Rect::from_min_max(egui::pos2(860.0, 0.0), egui::pos2(1200.0, 800.0)),
+        ];
+        let notch = || wheel(0.0, -1.0, egui::TouchPhase::Move, egui::MouseWheelSource::Wheel);
+        let mut in_drawer = vec![egui::Event::PointerMoved(egui::pos2(950.0, 300.0)), notch()];
+        g.route(&mut in_drawer, 0.0, &panes);
+        assert_eq!(deltas(&in_drawer).len(), 1);
+
+        // Moving onto the main page and scrolling repeatedly at < 0.3s intervals must
+        // unlock once GAP has elapsed since the last accepted drawer scroll (0.0).
+        let mut at_02 = vec![egui::Event::PointerMoved(egui::pos2(500.0, 300.0)), notch()];
+        assert!(!g.route(&mut at_02, 0.2, &panes));
+        assert!(deltas(&at_02).is_empty());
+
+        let mut at_035 = vec![notch()];
+        assert!(g.route(&mut at_035, 0.35, &panes));
+        assert_eq!(deltas(&at_035).len(), 1);
+    }
+
+    #[test]
+    fn clicking_main_page_unlocks_scroll_immediately() {
+        let mut g = Gesture::default();
+        let panes = sidebar();
+        let notch = || wheel(0.0, -1.0, egui::TouchPhase::Move, egui::MouseWheelSource::Wheel);
+        let mut in_side = vec![egui::Event::PointerMoved(egui::pos2(100.0, 300.0)), notch()];
+        g.route(&mut in_side, 0.0, &panes);
+
+        let mut on_page = vec![
+            egui::Event::PointerButton {
+                pos: egui::pos2(500.0, 300.0),
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+            notch(),
+        ];
+        assert!(g.route(&mut on_page, 0.05, &panes));
+        assert_eq!(deltas(&on_page).len(), 1);
     }
 }

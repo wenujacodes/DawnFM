@@ -2164,6 +2164,7 @@ impl eframe::App for App {
                 };
                 egui::Area::new(egui::Id::unique(area_id))
                     .fixed_pos(full_rect.min)
+                    .constrain(false)
                     .order(egui::Order::Middle)
                     .show(&ctx, |ui| {
                         ui.set_clip_rect(visible_rect);
