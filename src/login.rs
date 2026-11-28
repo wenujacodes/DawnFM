@@ -192,6 +192,8 @@ fn store_id(profile_dir: &std::path::Path) -> [u8; 16] {
 
 fn run(site: Site, profile_dir: PathBuf) -> anyhow::Result<Outcome> {
     let mut event_loop = EventLoopBuilder::<()>::with_user_event().build();
+    #[cfg(target_os = "macos")]
+    configure_macos_accessory(&mut event_loop);
 
     let window = WindowBuilder::new()
         .with_title(site.title())
@@ -281,6 +283,27 @@ fn run(site: Site, profile_dir: PathBuf) -> anyhow::Result<Outcome> {
     });
     drop(webview);
     Ok(outcome)
+}
+
+/// Keep the child sign-in window out of the macOS Dock while still allowing it to
+/// activate and accept keyboard input in front of the main Dawn FM window.
+#[cfg(target_os = "macos")]
+fn configure_macos_accessory(event_loop: &mut tao::event_loop::EventLoop<()>) {
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
+
+    const NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY: isize = 1;
+    unsafe {
+        let app: Option<Retained<AnyObject>> = msg_send![objc2::class!(NSApplication), sharedApplication];
+        if let Some(app) = app {
+            let _: bool = msg_send![&*app, setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY];
+        }
+    }
+    event_loop.set_activation_policy(ActivationPolicy::Accessory);
+    event_loop.set_dock_visibility(false);
+    event_loop.set_activate_ignoring_other_apps(true);
 }
 
 #[cfg(test)]
