@@ -738,11 +738,7 @@ impl SpotifyClient {
                         .map(strip_html)
                         .filter(|s| !s.is_empty());
                 }
-                if let Some(hdr_uri) = json["headerImage"]["uri"].as_str().filter(|s| !s.is_empty()) {
-                    banner = thumbs_from_url(hdr_uri);
-                } else if let Some(hdr) = json["artist"]["visuals"]["headerImage"]["sources"].as_array() {
-                    banner = thumbs_from_json_sources(hdr);
-                }
+                banner = parse_about_banner(&json);
                 if photo.is_empty() {
                     if let Some(av) = json["artist"]["visuals"]["avatarImage"]["sources"].as_array() {
                         photo = thumbs_from_json_sources(av);
@@ -751,7 +747,8 @@ impl SpotifyClient {
             }
         }
         if banner.is_empty() {
-            banner = photo.clone();
+            let wide: Vec<_> = photo.iter().filter(|t| t.width > t.height).cloned().collect();
+            banner = if wide.is_empty() { photo.clone() } else { wide };
         }
 
         let mut top_uris = Vec::new();
@@ -2173,10 +2170,16 @@ fn thumbs_from_image_msgs(imgs: &[ProtoReader]) -> Vec<Thumb> {
                 Some(2) | Some(3) => 640,
                 _ => 300,
             });
+        let height = im
+            .number(4)
+            .map(unzigzag)
+            .filter(|&h| h > 0)
+            .map(|h| h as u32)
+            .unwrap_or(px);
         out.push(Thumb {
             url,
             width: px,
-            height: px,
+            height,
         });
     }
     out.sort_by_key(|t| t.width);
@@ -2267,6 +2270,22 @@ fn thumbs_from_url(url: &str) -> Vec<Thumb> {
     }]
 }
 
+fn parse_about_banner(json: &Value) -> Vec<Thumb> {
+    if let Some(hdr) = json["headerImage"]["sources"].as_array() {
+        let thumbs = thumbs_from_json_sources(hdr);
+        if !thumbs.is_empty() {
+            return thumbs;
+        }
+    }
+    if let Some(hdr_uri) = json["headerImage"]["uri"].as_str().filter(|s| !s.is_empty()) {
+        return thumbs_from_url(hdr_uri);
+    }
+    if let Some(hdr) = json["artist"]["visuals"]["headerImage"]["sources"].as_array() {
+        return thumbs_from_json_sources(hdr);
+    }
+    Vec::new()
+}
+
 fn thumbs_from_json_sources(sources: &[Value]) -> Vec<Thumb> {
     let mut out: Vec<Thumb> = sources
         .iter()
@@ -2350,5 +2369,26 @@ mod tests {
         assert!(looks_like_spotify_user_id("spotify:user:3123456789abcdefghij"));
         assert!(!looks_like_spotify_user_id("Lofi Girl"));
         assert!(!looks_like_spotify_user_id("Spotify"));
+    }
+
+    #[test]
+    fn parses_spotify_about_header_banner_shapes() {
+        let with_sources = serde_json::json!({
+            "headerImage": {
+                "sources": [{ "url": "https://i.scdn.co/image/hdr1", "width": 2660, "height": 1140 }]
+            }
+        });
+        let parsed = parse_about_banner(&with_sources);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].width, 2660);
+        assert_eq!(parsed[0].height, 1140);
+
+        let with_uri = serde_json::json!({
+            "headerImage": { "uri": "spotify:image:ab67618600001016abc" }
+        });
+        assert_eq!(
+            parse_about_banner(&with_uri)[0].url,
+            "https://i.scdn.co/image/ab67618600001016abc"
+        );
     }
 }

@@ -2325,9 +2325,9 @@ pub fn artist(app: &mut App, ui: &mut Ui, id: &str, now: f64) {
     let (hero, _) = ui.allocate_exact_size(vec2(w, hero_h), Sense::hover());
     let target_px = ((w * ui.ctx().pixels_per_point()).round() as u32).min(1920);
     if let Some(t) = crate::model::pick_thumb(&a.banner, target_px).or_else(|| a.banner.iter().max_by_key(|t| t.width)) {
-        let img_ratio = if t.height > 0 { t.width as f32 / t.height as f32 } else { 16.0 / 9.0 };
-        let vis_h = (img_ratio / (w / hero_h)).min(1.0);
-        let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, vis_h));
+        // Aspect-fill using the actual decoded texture dimensions inside paint_remote_vfade
+        // so both wide banners (2.33:1) and square portraits (1:1) keep faces framed properly.
+        let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
         widgets::paint_remote_vfade(ui, &t.url, hero, uv, Color32::WHITE, 0.38);
     } else {
         widgets::rect_vfade(ui.painter(), hero, theme::with_alpha(accent, 0.25), 0.38);
