@@ -6,7 +6,7 @@
 ;   iscc /DArm64 installer\dawnfm.iss  ->  dawnfm-setup-v<version>-arm64.exe
 
 #define MyAppName "Dawn FM"
-#define MyAppVersion "2.6.0"
+#define MyAppVersion "2.6.1"
 #define MyAppPublisher "Dawn FM Team"
 #define MyAppURL "https://github.com/wenujacodes/DawnFM"
 #define MyAppExeName "dawnfm.exe"
