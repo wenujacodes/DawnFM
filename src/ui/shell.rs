@@ -1467,7 +1467,7 @@ pub fn queue_list(app: &mut App, ui: &mut Ui, salt: &str) {
 
                         let text_x = rect.left() + 40.0;
                         let max_w = card_w - 60.0;
-                        widgets::text_at(ui, pos2(text_x, cy - 8.5), &t.title, theme::semibold(13.0), ink, max_w);
+                        widgets::title_with_explicit(ui, pos2(text_x, cy - 8.5), &t.title, theme::semibold(13.0), ink, max_w, t.explicit);
                         widgets::text_at(ui, pos2(text_x, cy + 4.5), &t.artist_line(), theme::regular(11.5), ink, max_w);
 
                         let handle_x = rect.right() - 8.0;

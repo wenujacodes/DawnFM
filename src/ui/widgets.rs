@@ -1458,7 +1458,7 @@ pub fn track_row(ui: &mut Ui, t: &Track, o: &RowOpts, acts: &mut Vec<Action>) ->
         let title_col = if o.plain_text { plain_ink } else { theme::text() };
         let content_w = content_right - x;
         let artist_x = x + content_w * 0.48;
-        text_at(ui, pos2(x, cy - 9.0), &t.title, theme::semibold(14.5), title_col, artist_x - x - 16.0);
+        title_with_explicit(ui, pos2(x, cy - 9.0), &t.title, theme::semibold(14.5), title_col, artist_x - x - 16.0, t.explicit);
         linked_text(ui, pos2(artist_x, cy - 8.0), &t.artist_line(), &t.artists, theme::regular(13.5), dim_col, content_w - (artist_x - x) - 16.0, acts);
         if let Some(p) = &plays_text {
             ui.painter().text(pos2(plays_right, cy), Align2::RIGHT_CENTER, p, theme::regular(13.0), dim_col);

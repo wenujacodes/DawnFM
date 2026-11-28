@@ -1398,7 +1398,8 @@ fn recent_searches(ui: &mut Ui, app: &mut App) {
                 let x = art.right() + 12.0;
                 let more_r = Rect::from_center_size(pos2(rect.right() - 18.0, rect.center().y), Vec2::splat(24.0));
                 let text_w = (more_r.left() - x - 4.0).max(40.0);
-                widgets::text_at(ui, pos2(x, rect.center().y - 16.0), &r.title, theme::semibold(13.5), theme::text(), text_w);
+                let is_explicit = matches!(&r.target, Some(Target::Song(t)) if t.explicit);
+                widgets::title_with_explicit(ui, pos2(x, rect.center().y - 16.0), &r.title, theme::semibold(13.5), theme::text(), text_w, is_explicit);
                 widgets::text_at(ui, pos2(x, rect.center().y + 3.0), &r.subtitle, theme::regular(12.0), theme::text_dim(), text_w);
 
                 let more_resp = named(ui.interact(more_r, resp.id.with("more"), Sense::click()), "More").on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -2250,8 +2251,7 @@ fn artist_top_songs_section(ui: &mut Ui, a: &crate::backend::ArtistPage, acts: &
                                 let right_pad = 12.0;
                                 let dur_w = if t.duration.is_some() { 36.0 } else { 0.0 };
                                 let text_w = (tile_rect.right() - text_x - right_pad - dur_w).max(30.0);
-                                let title_g = widgets::galley(ui, &t.title, theme::semibold(13.0), theme::text(), text_w);
-                                ui.painter().galley(pos2(text_x, tile_rect.center().y - 14.0), title_g, theme::text());
+                                widgets::title_with_explicit(ui, pos2(text_x, tile_rect.center().y - 14.0), &t.title, theme::semibold(13.0), theme::text(), text_w, t.explicit);
 
                                 let mut sub = t.album.as_ref().map(|a| a.name.clone()).unwrap_or_else(|| t.artist_line());
                                 if let Some(p) = t.plays.map(crate::backend::compact) {
